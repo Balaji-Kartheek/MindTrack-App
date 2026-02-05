@@ -24,15 +24,55 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.2'
-          cache-read-only: false
 
-      - name: Generate Gradle Wrapper (if needed)
+      - name: Setup Gradle Wrapper
         run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "Generating Gradle wrapper..."
-            gradle wrapper --gradle-version 8.2
+          echo "Setting up Gradle wrapper..."
+          
+          # Ensure wrapper directory exists
+          mkdir -p gradle/wrapper
+          
+          # Check if wrapper jar exists
+          if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Wrapper jar missing, generating..."
+            
+            # Use gradle command to generate wrapper
+            # This requires build.gradle to exist (which it does)
+            gradle wrapper --gradle-version 8.2 --distribution-type all
+            
+            # Verify it was created
+            if [ -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+              echo "✓ Wrapper jar generated successfully"
+              ls -lh gradle/wrapper/gradle-wrapper.jar
+            else
+              echo "✗ Failed to generate wrapper jar"
+              echo "Current directory: $(pwd)"
+              echo "Files in gradle/wrapper:"
+              ls -la gradle/wrapper/ || echo "Directory doesn't exist"
+              echo "Checking if build.gradle exists:"
+              ls -la build.gradle || echo "build.gradle not found"
+              exit 1
+            fi
+          else
+            echo "✓ Wrapper jar already exists"
           fi
-          chmod +x gradlew || true
+          
+          # Ensure gradlew is executable
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            echo "✓ gradlew is executable"
+          else
+            echo "✗ gradlew script not found!"
+            echo "Generating gradlew script..."
+            gradle wrapper --gradle-version 8.2
+            chmod +x gradlew
+          fi
+          
+          # Final verification
+          echo "Verifying wrapper setup..."
+          echo "gradlew exists: $([ -f ./gradlew ] && echo 'YES' || echo 'NO')"
+          echo "wrapper jar exists: $([ -f ./gradle/wrapper/gradle-wrapper.jar ] && echo 'YES' || echo 'NO')"
+          echo "wrapper jar size: $(stat -c%s gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo 'N/A') bytes"
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
