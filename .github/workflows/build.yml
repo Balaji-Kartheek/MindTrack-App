@@ -19,23 +19,20 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
+          cache-read-only: false
+
+      - name: Generate Gradle Wrapper (if needed)
         run: |
-          # Check if gradlew exists, if not generate it
           if [ ! -f "./gradlew" ]; then
-            echo "Gradle wrapper not found, generating..."
-            # Download Gradle wrapper JAR if it doesn't exist
-            if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
-              mkdir -p gradle/wrapper
-              curl -L https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-            fi
-            # Make gradlew executable
-            chmod +x gradlew || true
-          else
-            chmod +x gradlew
+            echo "Generating Gradle wrapper..."
+            gradle wrapper --gradle-version 8.2
           fi
+          chmod +x gradlew || true
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
