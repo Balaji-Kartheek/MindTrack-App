@@ -166,7 +166,7 @@ class ChatbotFragment : Fragment() {
                         Content(parts = listOf(Part(text = enhancedPrompt)))
                     )
                 )
-                val response = service.generateContent(request)
+                val response = service.generateContent(request = request)
 
                 withContext(Dispatchers.Main) {
                     if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
