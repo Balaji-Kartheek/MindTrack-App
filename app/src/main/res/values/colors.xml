@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#6200EE</color>
+    <color name="colorPrimaryDark">#3700B3</color>
+    <color name="colorAccent">#03DAC5</color>
+    
+    <!-- Navigation -->
+    <color name="nav_item_color">@android:color/black</color>
+    
+    <!-- Messages -->
+    <color name="message_user_background">#6200EE</color>
+    <color name="message_bot_background">#E0E0E0</color>
+    
+    <!-- Alerts -->
+    <color name="alert_background">#F44336</color>
+    
+    <!-- Correlation -->
+    <color name="correlation_background">#E3F2FD</color>
+</resources>
