@@ -164,8 +164,9 @@ class ChatbotFragment : Fragment() {
                 val request = GeminiRequest(
                     contents = listOf(
                         Content(parts = listOf(Part(text = enhancedPrompt)))
+                    )
                 )
-                val response = service.generateContent(request = request)
+                val response = service.generateContent(request)
 
                 withContext(Dispatchers.Main) {
                     if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
