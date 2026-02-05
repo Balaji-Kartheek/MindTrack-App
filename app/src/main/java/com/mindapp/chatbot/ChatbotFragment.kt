@@ -173,10 +173,21 @@ class ChatbotFragment : Fragment() {
                     // Remove loading message
                     chatMessages.removeAt(chatMessages.size - 1)
 
-                    if (response.isSuccessful && response.body()?.candidates?.isNotEmpty() == true) {
-                        val aiResponse = response.body()!!.candidates[0].content.parts[0].text
-                        val aiMessage = ChatMessage(text = aiResponse, isUser = false)
-                        chatMessages.add(aiMessage)
+                    val responseBody = response.body()
+                    val candidates = responseBody?.candidates
+                    if (response.isSuccessful && candidates?.isNotEmpty() == true) {
+                        val firstCandidate = candidates?.firstOrNull()
+                        val aiResponse = firstCandidate?.content?.parts?.firstOrNull()?.text
+                        if (aiResponse != null) {
+                            val aiMessage = ChatMessage(text = aiResponse, isUser = false)
+                            chatMessages.add(aiMessage)
+                        } else {
+                            val errorMessage = ChatMessage(
+                                text = "Sorry, I couldn't parse the AI response.",
+                                isUser = false
+                            )
+                            chatMessages.add(errorMessage)
+                        }
                     } else {
                         val errorMessage = ChatMessage(
                             text = "Sorry, I couldn't process your request. " +

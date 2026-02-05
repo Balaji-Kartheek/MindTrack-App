@@ -83,7 +83,10 @@ object UsageStatsHelper {
                 if (totalTime > 0) {
                     val existing = appUsageMap[packageName]
                     if (existing != null) {
-                        existing.totalTime += totalTime
+                        // Create new instance with updated totalTime (data class is immutable)
+                        appUsageMap[packageName] = existing.copy(
+                            totalTime = existing.totalTime + totalTime
+                        )
                     } else {
                         val category = getAppCategory(packageName)
                         appUsageMap[packageName] = AppUsageInfo(
