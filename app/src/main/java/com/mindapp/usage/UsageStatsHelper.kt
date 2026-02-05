@@ -31,41 +31,48 @@ object UsageStatsHelper {
     )
 
     /**
-     * Checks if Usage Stats permission is granted
+     * Checks if Usage Stats permission is granted.
+     * Returns false on any error to avoid crashes on devices with different APIs.
      */
     fun hasUsageStatsPermission(context: Context): Boolean {
-        val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOpsManager.checkOpNoThrow(
-            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            context.packageName
-        )
-        return mode == android.app.AppOpsManager.MODE_ALLOWED
+        return try {
+            val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+                ?: return false
+            val mode = appOpsManager.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+            mode == android.app.AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
-     * Gets usage stats for today
+     * Gets usage stats for today. Returns empty list on any error to avoid crashes.
      */
     fun getTodayUsageStats(context: Context): List<AppUsageInfo> {
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val startTime = calendar.timeInMillis
-        
-        val endTime = System.currentTimeMillis()
-        
-        val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            startTime,
-            endTime
-        )
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                ?: return emptyList()
+            
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val startTime = calendar.timeInMillis
+            val endTime = System.currentTimeMillis()
+            
+            val stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            )
 
-        val packageManager = context.packageManager
-        val appUsageMap = mutableMapOf<String, AppUsageInfo>()
+            val packageManager = context.packageManager
+            val appUsageMap = mutableMapOf<String, AppUsageInfo>()
 
         stats?.forEach { usageStat ->
             val packageName = usageStat.packageName
@@ -102,7 +109,10 @@ object UsageStatsHelper {
             }
         }
 
-        return appUsageMap.values.sortedByDescending { it.totalTime }
+            appUsageMap.values.sortedByDescending { it.totalTime }
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     /**

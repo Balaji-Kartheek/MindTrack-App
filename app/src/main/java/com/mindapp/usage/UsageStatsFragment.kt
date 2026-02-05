@@ -42,13 +42,12 @@ class UsageStatsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        setupRecyclerView()
-        loadUsageStats()
-        
-        // Set up refresh button
-        binding.btnRefresh.setOnClickListener {
+        try {
+            setupRecyclerView()
             loadUsageStats()
+            binding.btnRefresh.setOnClickListener { loadUsageStats() }
+        } catch (e: Exception) {
+            android.util.Log.e("UsageStatsFragment", "onViewCreated", e)
         }
     }
 
@@ -67,61 +66,60 @@ class UsageStatsFragment : Fragment() {
      * Loads and displays usage statistics
      */
     private fun loadUsageStats() {
-        binding.progressBar.visibility = View.VISIBLE
+        _binding?.progressBar?.visibility = View.VISIBLE
+        val ctx = context ?: return
         
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Check permission first
-                if (!UsageStatsHelper.hasUsageStatsPermission(requireContext())) {
+                if (!UsageStatsHelper.hasUsageStatsPermission(ctx)) {
                     withContext(Dispatchers.Main) {
-                        binding.progressBar.visibility = View.GONE
-                        Toast.makeText(
-                            requireContext(),
-                            "Please grant Usage Stats permission in Settings",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        _binding?.progressBar?.visibility = View.GONE
+                        if (isAdded) {
+                            Toast.makeText(
+                                requireContext(),
+                                "Please grant Usage Stats permission in Settings",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }
                     return@launch
                 }
 
-                // Get usage stats
-                val totalScreenTime = UsageStatsHelper.getTotalScreenTime(requireContext())
-                val socialMediaUsage = UsageStatsHelper.getSocialMediaUsage(requireContext())
-                val topApps = UsageStatsHelper.getTopApps(requireContext(), 5)
+                val totalScreenTime = UsageStatsHelper.getTotalScreenTime(ctx)
+                val socialMediaUsage = UsageStatsHelper.getSocialMediaUsage(ctx)
+                val topApps = UsageStatsHelper.getTopApps(ctx, 5)
 
                 withContext(Dispatchers.Main) {
-                    // Update UI
-                    binding.tvTotalScreenTime.text = UsageStatsHelper.formatTime(totalScreenTime)
-                    binding.tvSocialMediaUsage.text = UsageStatsHelper.formatTime(socialMediaUsage)
-                    
-                    // Update top apps list
+                    val b = _binding ?: return@withContext
+                    b.tvTotalScreenTime.text = UsageStatsHelper.formatTime(totalScreenTime)
+                    b.tvSocialMediaUsage.text = UsageStatsHelper.formatTime(socialMediaUsage)
                     topAppsAdapter.submitList(topApps)
                     
-                    // Check for social media alert (3 hours = 10800000 ms)
                     val threeHoursInMillis = 3 * 60 * 60 * 1000L
                     if (socialMediaUsage > threeHoursInMillis) {
-                        binding.tvAlert.visibility = View.VISIBLE
-                        binding.tvAlert.text = "⚠️ Alert: You've used social media for more than 3 hours today!"
-                        
-                        // Send notification
-                        NotificationHelper.sendSocialMediaAlert(
-                            requireContext(),
-                            UsageStatsHelper.formatTime(socialMediaUsage)
-                        )
+                        b.tvAlert.visibility = View.VISIBLE
+                        b.tvAlert.text = "⚠️ Alert: You've used social media for more than 3 hours today!"
+                        try {
+                            NotificationHelper.sendSocialMediaAlert(
+                                requireContext(),
+                                UsageStatsHelper.formatTime(socialMediaUsage)
+                            )
+                        } catch (_: Exception) { }
                     } else {
-                        binding.tvAlert.visibility = View.GONE
+                        b.tvAlert.visibility = View.GONE
                     }
-                    
-                    binding.progressBar.visibility = View.GONE
+                    b.progressBar.visibility = View.GONE
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    binding.progressBar.visibility = View.GONE
-                    Toast.makeText(
-                        requireContext(),
-                        "Error loading usage stats: ${e.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    _binding?.progressBar?.visibility = View.GONE
+                    if (isAdded) {
+                        Toast.makeText(
+                            requireContext(),
+                            "Error loading usage stats: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         }

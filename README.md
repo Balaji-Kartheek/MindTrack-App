@@ -209,6 +209,7 @@ The project includes a GitHub Actions workflow that automatically builds the APK
 2. Workflow runs automatically
 3. Download APK from Actions → Artifacts
 
+
 ## Notes for Presentation
 
 1. **Architecture**: Explain the fragment-based architecture with bottom navigation

@@ -36,7 +36,7 @@ class MoodCheckFragment : Fragment() {
     private var _binding: FragmentMoodCheckBinding? = null
     private val binding get() = _binding!!
     
-    private lateinit var emotionService: EmotionService
+    private var emotionService: EmotionService? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -49,46 +49,43 @@ class MoodCheckFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        setupRetrofit()
-        
-        // Set up analyze button
-        binding.btnAnalyze.setOnClickListener {
-            analyzeEmotion()
-        }
-        
-        // Allow analyzing on Enter key
-        binding.etMoodInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEND) {
-                analyzeEmotion()
-                true
-            } else {
-                false
+        try {
+            setupRetrofit()
+            binding.btnAnalyze.setOnClickListener { analyzeEmotion() }
+            binding.etMoodInput.setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) {
+                    analyzeEmotion()
+                    true
+                } else false
             }
+        } catch (e: Exception) {
+            android.util.Log.e("MoodCheckFragment", "onViewCreated", e)
         }
     }
 
     /**
-     * Sets up Retrofit for Hugging Face API calls
+     * Sets up Retrofit for Hugging Face API calls. Safe even if API key is not set.
      */
     private fun setupRetrofit() {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+        try {
+            val loggingInterceptor = HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            }
+            val client = OkHttpClient.Builder()
+                .addInterceptor(loggingInterceptor)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+            val retrofit = Retrofit.Builder()
+                .baseUrl(ApiConfig.HUGGING_FACE_BASE_URL)
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            emotionService = retrofit.create(EmotionService::class.java)
+        } catch (e: Exception) {
+            android.util.Log.e("MoodCheckFragment", "setupRetrofit failed", e)
+            emotionService = null
         }
-
-        val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl(ApiConfig.HUGGING_FACE_BASE_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-        emotionService = retrofit.create(EmotionService::class.java)
     }
 
     /**
@@ -101,13 +98,18 @@ class MoodCheckFragment : Fragment() {
             return
         }
 
-        // Check API key
-        if (ApiConfig.HUGGING_FACE_API_KEY == "YOUR_HUGGING_FACE_API_KEY_HERE") {
+        if (!ApiConfig.isHuggingFaceConfigured()) {
             Toast.makeText(
                 requireContext(),
-                "Please configure your Hugging Face API key in ApiConfig.kt",
+                "Please configure your Hugging Face API key in ApiConfig.kt and rebuild the app.",
                 Toast.LENGTH_LONG
             ).show()
+            return
+        }
+
+        val service = emotionService
+        if (service == null) {
+            Toast.makeText(requireContext(), "Mood service not available. Please restart the app.", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -115,37 +117,35 @@ class MoodCheckFragment : Fragment() {
         binding.btnAnalyze.isEnabled = false
         binding.tvEmotionResult.visibility = View.GONE
         binding.tvCorrelation.visibility = View.GONE
+        val ctx = context
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val request = EmotionRequest(inputs = inputText)
-                val response = emotionService.detectEmotion(request = request)
+                val response = service.detectEmotion(request = request)
 
                 withContext(Dispatchers.Main) {
-                    binding.progressBar.visibility = View.GONE
-                    binding.btnAnalyze.isEnabled = true
-
-                    if (response.isSuccessful && response.body() != null) {
-                        val emotions = response.body()!!
-                        displayEmotionResults(emotions, inputText)
-                        correlateWithUsage(emotions)
+                    _binding?.progressBar?.visibility = View.GONE
+                    _binding?.btnAnalyze?.isEnabled = true
+                    if (response.isSuccessful) {
+                        val emotions = response.body()
+                        if (emotions != null) {
+                            displayEmotionResults(emotions, inputText)
+                            correlateWithUsage(emotions)
+                        } else {
+                            if (isAdded) Toast.makeText(requireContext(), "Error: No response from API", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
-                        Toast.makeText(
-                            requireContext(),
-                            "Error analyzing emotion: ${response.message()}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        if (isAdded) Toast.makeText(requireContext(), "Error: ${response.message()}", Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    binding.progressBar.visibility = View.GONE
-                    binding.btnAnalyze.isEnabled = true
-                    Toast.makeText(
-                        requireContext(),
-                        "Error: ${e.message}. Please check your internet connection and API key.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    _binding?.progressBar?.visibility = View.GONE
+                    _binding?.btnAnalyze?.isEnabled = true
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "Error: ${e.message}. Check internet and API key.", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
@@ -155,11 +155,9 @@ class MoodCheckFragment : Fragment() {
      * Displays emotion analysis results
      */
     private fun displayEmotionResults(emotions: List<EmotionResult>, inputText: String) {
-        // Sort by score (highest first)
+        if (emotions.isEmpty()) return
         val sortedEmotions = emotions.sortedByDescending { it.score }
         val topEmotion = sortedEmotions.first()
-
-        // Format results
         val emotionText = buildString {
             append("Detected Emotion: ${topEmotion.label.uppercase()}\n\n")
             append("Confidence Scores:\n")
@@ -168,51 +166,40 @@ class MoodCheckFragment : Fragment() {
                 append("• ${emotion.label}: $percentage%\n")
             }
         }
-
-        binding.tvEmotionResult.text = emotionText
-        binding.tvEmotionResult.visibility = View.VISIBLE
-
-        // Update emoji based on emotion
+        _binding?.tvEmotionResult?.text = emotionText
+        _binding?.tvEmotionResult?.visibility = View.VISIBLE
         val emoji = getEmotionEmoji(topEmotion.label)
-        binding.tvEmotionEmoji.text = emoji
-        binding.tvEmotionEmoji.visibility = View.VISIBLE
+        _binding?.tvEmotionEmoji?.text = emoji
+        _binding?.tvEmotionEmoji?.visibility = View.VISIBLE
     }
 
     /**
      * Correlates detected emotion with app usage patterns
      */
     private fun correlateWithUsage(emotions: List<EmotionResult>) {
+        val ctx = context ?: return
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (!UsageStatsHelper.hasUsageStatsPermission(requireContext())) {
+                if (!UsageStatsHelper.hasUsageStatsPermission(ctx)) {
                     withContext(Dispatchers.Main) {
-                        binding.tvCorrelation.text = "Usage stats permission not granted. " +
-                                "Enable it to see correlations."
-                        binding.tvCorrelation.visibility = View.VISIBLE
+                        _binding?.tvCorrelation?.text = "Usage stats permission not granted. Enable it to see correlations."
+                        _binding?.tvCorrelation?.visibility = View.VISIBLE
                     }
                     return@launch
                 }
-
-                val topEmotion = emotions.sortedByDescending { it.score }.first()
-                val totalScreenTime = UsageStatsHelper.getTotalScreenTime(requireContext())
-                val socialMediaUsage = UsageStatsHelper.getSocialMediaUsage(requireContext())
-                val topApps = UsageStatsHelper.getTopApps(requireContext(), 3)
-
-                val correlationText = buildCorrelationText(
-                    topEmotion.label,
-                    totalScreenTime,
-                    socialMediaUsage,
-                    topApps
-                )
-
+                val topEmotion = emotions.sortedByDescending { it.score }.firstOrNull() ?: return@launch
+                val totalScreenTime = UsageStatsHelper.getTotalScreenTime(ctx)
+                val socialMediaUsage = UsageStatsHelper.getSocialMediaUsage(ctx)
+                val topApps = UsageStatsHelper.getTopApps(ctx, 3)
+                val correlationText = buildCorrelationText(topEmotion.label, totalScreenTime, socialMediaUsage, topApps)
                 withContext(Dispatchers.Main) {
-                    binding.tvCorrelation.text = correlationText
-                    binding.tvCorrelation.visibility = View.VISIBLE
+                    _binding?.tvCorrelation?.text = correlationText
+                    _binding?.tvCorrelation?.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    binding.tvCorrelation.text = "Unable to correlate with usage stats."
-                    binding.tvCorrelation.visibility = View.VISIBLE
+                    _binding?.tvCorrelation?.text = "Unable to correlate with usage stats."
+                    _binding?.tvCorrelation?.visibility = View.VISIBLE
                 }
             }
         }

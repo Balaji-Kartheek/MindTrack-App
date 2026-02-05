@@ -36,7 +36,7 @@ class ChatbotFragment : Fragment() {
     private var _binding: FragmentChatbotBinding? = null
     private val binding get() = _binding!!
     
-    private lateinit var geminiService: GeminiService
+    private var geminiService: GeminiService? = null
     private val chatMessages = mutableListOf<ChatMessage>()
     private lateinit var chatAdapter: ChatAdapter
 
@@ -51,50 +51,50 @@ class ChatbotFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        setupRetrofit()
-        setupRecyclerView()
-        
-        // Add welcome message
-        addWelcomeMessage()
-        
-        // Set up send button
-        binding.btnSend.setOnClickListener {
-            sendMessage()
-        }
-        
-        // Allow sending on Enter key
-        binding.etMessage.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEND) {
-                sendMessage()
-                true
-            } else {
-                false
+        try {
+            setupRetrofit()
+            setupRecyclerView()
+            addWelcomeMessage()
+            binding.btnSend.setOnClickListener { sendMessage() }
+            binding.etMessage.setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) {
+                    sendMessage()
+                    true
+                } else false
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ChatbotFragment", "onViewCreated", e)
+            addWelcomeMessage()
+            if (::chatAdapter.isInitialized) {
+                chatMessages.add(ChatMessage(text = "Chat is temporarily unavailable. Please check API key in ApiConfig.kt", isUser = false))
+                chatAdapter.submitList(chatMessages.toList())
             }
         }
     }
 
     /**
-     * Sets up Retrofit for API calls
+     * Sets up Retrofit for API calls. Safe to call even if API key is not set.
      */
     private fun setupRetrofit() {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+        try {
+            val loggingInterceptor = HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            }
+            val client = OkHttpClient.Builder()
+                .addInterceptor(loggingInterceptor)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+            val retrofit = Retrofit.Builder()
+                .baseUrl(ApiConfig.GEMINI_BASE_URL)
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            geminiService = retrofit.create(GeminiService::class.java)
+        } catch (e: Exception) {
+            android.util.Log.e("ChatbotFragment", "setupRetrofit failed", e)
+            geminiService = null
         }
-
-        val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl(ApiConfig.GEMINI_BASE_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-        geminiService = retrofit.create(GeminiService::class.java)
     }
 
     /**
@@ -114,13 +114,14 @@ class ChatbotFragment : Fragment() {
      * Adds welcome message to chat
      */
     private fun addWelcomeMessage() {
-        val welcomeMessage = ChatMessage(
-            text = "Hello! I'm your Digital Wellbeing Assistant. " +
-                    "I can help you understand your app usage patterns and provide tips " +
-                    "for healthier digital habits. How can I help you today?",
-            isUser = false
-        )
-        chatMessages.add(welcomeMessage)
+        if (!::chatAdapter.isInitialized) return
+        val welcomeText = if (ApiConfig.isGeminiConfigured()) {
+            "Hello! I'm your Digital Wellbeing Assistant. I can help you understand your app usage patterns and provide tips for healthier digital habits. How can I help you today?"
+        } else {
+            "Hello! To use the AI assistant, please add your Gemini API key in ApiConfig.kt and rebuild the app. Until then, you can use the Usage and Mood tabs."
+        }
+        chatMessages.clear()
+        chatMessages.add(ChatMessage(text = welcomeText, isUser = false))
         chatAdapter.submitList(chatMessages.toList())
     }
 
@@ -131,87 +132,73 @@ class ChatbotFragment : Fragment() {
         val messageText = binding.etMessage.text.toString().trim()
         if (messageText.isEmpty()) return
 
-        // Check API key
-        if (ApiConfig.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE") {
+        if (!ApiConfig.isGeminiConfigured()) {
             Toast.makeText(
                 requireContext(),
-                "Please configure your Gemini API key in ApiConfig.kt",
+                "Please configure your Gemini API key in ApiConfig.kt and rebuild the app.",
                 Toast.LENGTH_LONG
             ).show()
             return
         }
 
-        // Add user message
+        val service = geminiService
+        if (service == null) {
+            Toast.makeText(requireContext(), "Chat service not available. Please restart the app.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val userMessage = ChatMessage(text = messageText, isUser = true)
         chatMessages.add(userMessage)
         chatAdapter.submitList(chatMessages.toList())
         binding.etMessage.text?.clear()
 
-        // Show loading indicator
         val loadingMessage = ChatMessage(text = "Thinking...", isUser = false, isLoading = true)
         chatMessages.add(loadingMessage)
         chatAdapter.submitList(chatMessages.toList())
         scrollToBottom()
 
-        // Get usage stats context for better responses
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val usageContext = getUsageContext()
                 val enhancedPrompt = buildPrompt(messageText, usageContext)
-
                 val request = GeminiRequest(
                     contents = listOf(
-                        Content(
-                            parts = listOf(Part(text = enhancedPrompt))
-                        )
-                    )
+                        Content(parts = listOf(Part(text = enhancedPrompt)))
                 )
-
-                val response = geminiService.generateContent(request = request)
+                val response = service.generateContent(request = request)
 
                 withContext(Dispatchers.Main) {
-                    // Remove loading message
-                    chatMessages.removeAt(chatMessages.size - 1)
-
+                    if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
+                        chatMessages.removeAt(chatMessages.size - 1)
+                    }
                     val responseBody = response.body()
                     val candidates = responseBody?.candidates
                     if (response.isSuccessful && candidates?.isNotEmpty() == true) {
-                        val firstCandidate = candidates?.firstOrNull()
+                        val firstCandidate = candidates.firstOrNull()
                         val aiResponse = firstCandidate?.content?.parts?.firstOrNull()?.text
                         if (aiResponse != null) {
-                            val aiMessage = ChatMessage(text = aiResponse, isUser = false)
-                            chatMessages.add(aiMessage)
+                            chatMessages.add(ChatMessage(text = aiResponse, isUser = false))
                         } else {
-                            val errorMessage = ChatMessage(
-                                text = "Sorry, I couldn't parse the AI response.",
-                                isUser = false
-                            )
-                            chatMessages.add(errorMessage)
+                            chatMessages.add(ChatMessage(text = "Sorry, I couldn't parse the AI response.", isUser = false))
                         }
                     } else {
-                        val errorMessage = ChatMessage(
-                            text = "Sorry, I couldn't process your request. " +
-                                    "Please check your API key and try again.",
+                        chatMessages.add(ChatMessage(
+                            text = "Sorry, I couldn't process your request. Please check your API key and try again.",
                             isUser = false
-                        )
-                        chatMessages.add(errorMessage)
+                        ))
                     }
-
                     chatAdapter.submitList(chatMessages.toList())
                     scrollToBottom()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    // Remove loading message
                     if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
                         chatMessages.removeAt(chatMessages.size - 1)
                     }
-
-                    val errorMessage = ChatMessage(
-                        text = "Error: ${e.message}. Please check your internet connection and API key.",
+                    chatMessages.add(ChatMessage(
+                        text = "Error: ${e.message ?: "Unknown"}. Check internet and API key.",
                         isUser = false
-                    )
-                    chatMessages.add(errorMessage)
+                    ))
                     chatAdapter.submitList(chatMessages.toList())
                     scrollToBottom()
                 }
@@ -223,13 +210,13 @@ class ChatbotFragment : Fragment() {
      * Gets current usage stats for context
      */
     private suspend fun getUsageContext(): String {
+        val ctx = context ?: return "Context not available."
         return withContext(Dispatchers.IO) {
             try {
-                if (UsageStatsHelper.hasUsageStatsPermission(requireContext())) {
-                    val totalTime = UsageStatsHelper.getTotalScreenTime(requireContext())
-                    val socialMediaTime = UsageStatsHelper.getSocialMediaUsage(requireContext())
-                    val topApps = UsageStatsHelper.getTopApps(requireContext(), 3)
-                    
+                if (UsageStatsHelper.hasUsageStatsPermission(ctx)) {
+                    val totalTime = UsageStatsHelper.getTotalScreenTime(ctx)
+                    val socialMediaTime = UsageStatsHelper.getSocialMediaUsage(ctx)
+                    val topApps = UsageStatsHelper.getTopApps(ctx, 3)
                     "Current usage stats: Total screen time: ${UsageStatsHelper.formatTime(totalTime)}, " +
                             "Social media: ${UsageStatsHelper.formatTime(socialMediaTime)}, " +
                             "Top apps: ${topApps.joinToString(", ") { it.appName }}"
@@ -263,10 +250,12 @@ class ChatbotFragment : Fragment() {
      * Scrolls chat to bottom
      */
     private fun scrollToBottom() {
-        binding.recyclerViewMessages.post {
-            val itemCount = chatAdapter.itemCount
-            if (itemCount > 0) {
-                binding.recyclerViewMessages.smoothScrollToPosition(itemCount - 1)
+        _binding?.recyclerViewMessages?.post {
+            if (::chatAdapter.isInitialized) {
+                val itemCount = chatAdapter.itemCount
+                if (itemCount > 0) {
+                    _binding?.recyclerViewMessages?.smoothScrollToPosition(itemCount - 1)
+                }
             }
         }
     }
