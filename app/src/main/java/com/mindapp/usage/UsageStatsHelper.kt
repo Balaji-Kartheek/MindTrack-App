@@ -65,65 +65,95 @@ object UsageStatsHelper {
             val startTime = calendar.timeInMillis
             val endTime = System.currentTimeMillis()
             
-            // Use INTERVAL_BEST for more accurate stats across different devices
-            val stats = usageStatsManager.queryUsageStats(
+            // Try INTERVAL_BEST first, fall back to INTERVAL_DAILY if needed
+            var stats = usageStatsManager.queryUsageStats(
                 UsageStatsManager.INTERVAL_BEST,
                 startTime,
                 endTime
             )
+            
+            // If INTERVAL_BEST returns empty or null, try INTERVAL_DAILY
+            if (stats.isNullOrEmpty()) {
+                stats = usageStatsManager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    startTime,
+                    endTime
+                )
+            }
+            
+            android.util.Log.d("UsageStatsHelper", "Total stats entries: ${stats?.size ?: 0}")
 
             val packageManager = context.packageManager
             val appUsageMap = mutableMapOf<String, AppUsageInfo>()
 
         // Process stats - some devices return duplicates, so aggregate by package name
+        var totalAppsProcessed = 0
+        var appsWithUsage = 0
+        
         stats?.forEach { usageStat ->
+            totalAppsProcessed++
             val packageName = usageStat.packageName
+            val totalTime = usageStat.totalTimeInForeground
+            
+            // Log all apps with usage (for debugging)
+            if (totalTime > 0) {
+                android.util.Log.d("UsageStatsHelper", "App: $packageName, Time: ${formatTime(totalTime)}")
+            }
             
             // Skip this app itself
             if (packageName == context.packageName) return@forEach
             
+            // Skip apps with no usage
+            if (totalTime <= 0) return@forEach
+            
             try {
                 val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
                 
-                // Allow both user apps and some system apps (don't skip all system apps)
-                // This ensures we track apps like YouTube, WhatsApp, etc.
+                // Check if it's a system app
                 val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                 val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
                 
-                // Skip only pure system apps (not updated system apps like YouTube, Chrome, etc.)
-                if (isSystemApp && !isUpdatedSystemApp) {
-                    // Still allow social media system apps
-                    if (!SOCIAL_MEDIA_PACKAGES.contains(packageName)) {
-                        return@forEach
-                    }
+                // More lenient filtering - include:
+                // 1. All user-installed apps
+                // 2. Updated system apps (like Chrome, YouTube)
+                // 3. Explicitly listed social media apps
+                val shouldInclude = when {
+                    !isSystemApp -> true // User apps
+                    isUpdatedSystemApp -> true // Updated system apps
+                    SOCIAL_MEDIA_PACKAGES.contains(packageName) -> true // Social media
+                    packageName.contains("com.android.chrome") -> true // Chrome
+                    packageName.contains("com.google.android") -> true // Google apps
+                    else -> false // Skip other system apps
                 }
                 
-                val appName = packageManager.getApplicationLabel(appInfo).toString()
-                val totalTime = usageStat.totalTimeInForeground
+                if (!shouldInclude) return@forEach
                 
-                if (totalTime > 0) {
-                    val existing = appUsageMap[packageName]
-                    if (existing != null) {
-                        // Create new instance with updated totalTime (data class is immutable)
-                        appUsageMap[packageName] = existing.copy(
-                            totalTime = existing.totalTime + totalTime
-                        )
-                    } else {
-                        val category = getAppCategory(packageName)
-                        appUsageMap[packageName] = AppUsageInfo(
-                            packageName = packageName,
-                            appName = appName,
-                            totalTime = totalTime,
-                            category = category
-                        )
-                    }
+                val appName = packageManager.getApplicationLabel(appInfo).toString()
+                appsWithUsage++
+                
+                val existing = appUsageMap[packageName]
+                if (existing != null) {
+                    // Create new instance with updated totalTime (data class is immutable)
+                    appUsageMap[packageName] = existing.copy(
+                        totalTime = existing.totalTime + totalTime
+                    )
+                } else {
+                    val category = getAppCategory(packageName)
+                    appUsageMap[packageName] = AppUsageInfo(
+                        packageName = packageName,
+                        appName = appName,
+                        totalTime = totalTime,
+                        category = category
+                    )
                 }
             } catch (e: PackageManager.NameNotFoundException) {
                 // App not found, skip
             } catch (e: Exception) {
-                // Skip on any error for this app
+                android.util.Log.e("UsageStatsHelper", "Error processing $packageName", e)
             }
         }
+        
+        android.util.Log.d("UsageStatsHelper", "Processed: $totalAppsProcessed apps, Found with usage: $appsWithUsage apps, Final list: ${appUsageMap.size} apps")
 
             appUsageMap.values.sortedByDescending { it.totalTime }
         } catch (e: Exception) {

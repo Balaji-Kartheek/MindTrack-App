@@ -95,6 +95,26 @@ class UsageStatsFragment : Fragment() {
                     b.tvSocialMediaUsage.text = UsageStatsHelper.formatTime(socialMediaUsage)
                     topAppsAdapter.submitList(topApps)
                     
+                    // Show helpful message if no apps found
+                    if (topApps.isEmpty()) {
+                        if (isAdded) {
+                            Toast.makeText(
+                                requireContext(),
+                                "No usage data yet. Use some apps and check back in 1-2 hours.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } else {
+                        // Show count of tracked apps
+                        if (isAdded) {
+                            Toast.makeText(
+                                requireContext(),
+                                "Tracking ${topApps.size} apps today",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    
                     val threeHoursInMillis = 3 * 60 * 60 * 1000L
                     if (socialMediaUsage > threeHoursInMillis) {
                         b.tvAlert.visibility = View.VISIBLE
