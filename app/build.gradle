@@ -3,6 +3,13 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Read local.properties file
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace 'com.mindapp'
     compileSdk 34
@@ -16,9 +23,15 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
-        // Read API keys from environment variables or use placeholders
-        buildConfigField "String", "GEMINI_API_KEY", "\"${System.getenv('GEMINI_API_KEY') ?: 'YOUR_GEMINI_API_KEY_HERE'}\""
-        buildConfigField "String", "HUGGING_FACE_API_KEY", "\"${System.getenv('HUGGING_FACE_API_KEY') ?: 'YOUR_HUGGING_FACE_API_KEY_HERE'}\""
+        // Read API keys from:
+        // 1. local.properties (for local development)
+        // 2. Environment variables (for CI/CD)
+        // 3. Use placeholders if neither is set
+        def geminiKey = localProperties.getProperty('GEMINI_API_KEY') ?: System.getenv('GEMINI_API_KEY') ?: 'YOUR_GEMINI_API_KEY_HERE'
+        def huggingFaceKey = localProperties.getProperty('HUGGING_FACE_API_KEY') ?: System.getenv('HUGGING_FACE_API_KEY') ?: 'YOUR_HUGGING_FACE_API_KEY_HERE'
+        
+        buildConfigField "String", "GEMINI_API_KEY", "\"${geminiKey}\""
+        buildConfigField "String", "HUGGING_FACE_API_KEY", "\"${huggingFaceKey}\""
     }
 
     buildTypes {

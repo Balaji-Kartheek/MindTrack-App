@@ -1,0 +1,8 @@
+# Copy this file to local.properties and add your API keys
+# local.properties is gitignored by default in Android projects
+
+# Get your Gemini API key from: https://makersuite.google.com/app/apikey
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
+
+# Get your Hugging Face API key from: https://huggingface.co/settings/tokens
+HUGGING_FACE_API_KEY=YOUR_HUGGING_FACE_API_KEY_HERE
