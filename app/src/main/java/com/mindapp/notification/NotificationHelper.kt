@@ -1,4 +1,4 @@
-git commit -m "Crash fixes: error handling, ApiConfig checks, safe binding in fragments"package com.mindapp.notification
+package com.mindapp.notification
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
