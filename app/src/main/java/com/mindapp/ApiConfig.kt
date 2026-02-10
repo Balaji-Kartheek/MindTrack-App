@@ -20,6 +20,8 @@ package com.mindapp
 
 object ApiConfig {
     // API keys are injected from BuildConfig during compilation
+    // Keys are read from local.properties at build time
+    // Make sure to add your keys to local.properties before building
     val GEMINI_API_KEY: String = BuildConfig.GEMINI_API_KEY
     
     val HUGGING_FACE_API_KEY: String = BuildConfig.HUGGING_FACE_API_KEY

@@ -116,9 +116,19 @@ class ChatbotFragment : Fragment() {
     private fun addWelcomeMessage() {
         if (!::chatAdapter.isInitialized) return
         val welcomeText = if (ApiConfig.isGeminiConfigured()) {
-            "Hello! I'm your Digital Wellbeing Assistant. I can help you understand your app usage patterns and provide tips for healthier digital habits. How can I help you today?"
+            "👋 Hello! I'm your Digital Wellbeing Assistant powered by Google Gemini.\n\n" +
+            "I can help you:\n" +
+            "• Understand your screen time patterns\n" +
+            "• Get tips for healthier digital habits\n" +
+            "• Set realistic usage goals\n" +
+            "• Improve your digital wellbeing\n\n" +
+            "How can I assist you today?"
         } else {
-            "Hello! To use the AI assistant, please add your Gemini API key in ApiConfig.kt and rebuild the app. Until then, you can use the Usage and Mood tabs."
+            "⚠️ API Configuration Required\n\n" +
+            "To use the AI assistant, please:\n" +
+            "1. Add your Gemini API key to local.properties\n" +
+            "2. Rebuild the app\n\n" +
+            "Meanwhile, check out the Usage and Mood tabs!"
         }
         chatMessages.clear()
         chatMessages.add(ChatMessage(text = welcomeText, isUser = false))
@@ -133,17 +143,23 @@ class ChatbotFragment : Fragment() {
         if (messageText.isEmpty()) return
 
         if (!ApiConfig.isGeminiConfigured()) {
-            Toast.makeText(
-                requireContext(),
-                "⚠️ API key not configured! You need to:\n1. Set GitHub Secrets\n2. Build NEW APK\n3. Install NEW APK\nSee GITHUB_SECRETS_SETUP.md",
-                Toast.LENGTH_LONG
-            ).show()
+            chatMessages.add(ChatMessage(
+                text = "⚠️ Configuration Error\n\nGemini API key is not configured. Please add your API key to local.properties and rebuild the app.",
+                isUser = false
+            ))
+            chatAdapter.submitList(chatMessages.toList())
+            scrollToBottom()
             return
         }
 
         val service = geminiService
         if (service == null) {
-            Toast.makeText(requireContext(), "Chat service not available. Please restart the app.", Toast.LENGTH_SHORT).show()
+            chatMessages.add(ChatMessage(
+                text = "❌ Service Error\n\nChat service is not available. Please restart the app.",
+                isUser = false
+            ))
+            chatAdapter.submitList(chatMessages.toList())
+            scrollToBottom()
             return
         }
 
@@ -151,8 +167,9 @@ class ChatbotFragment : Fragment() {
         chatMessages.add(userMessage)
         chatAdapter.submitList(chatMessages.toList())
         binding.etMessage.text?.clear()
+        scrollToBottom()
 
-        val loadingMessage = ChatMessage(text = "Thinking...", isUser = false, isLoading = true)
+        val loadingMessage = ChatMessage(text = "✨ Thinking...", isUser = false, isLoading = true)
         chatMessages.add(loadingMessage)
         chatAdapter.submitList(chatMessages.toList())
         scrollToBottom()
@@ -183,8 +200,9 @@ class ChatbotFragment : Fragment() {
                             chatMessages.add(ChatMessage(text = "Sorry, I couldn't parse the AI response.", isUser = false))
                         }
                     } else {
+                        val errorMsg = response.errorBody()?.string() ?: "Unknown error"
                         chatMessages.add(ChatMessage(
-                            text = "Sorry, I couldn't process your request. Please check your API key and try again.",
+                            text = "❌ API Error\n\nCouldn't process your request.\n\nDetails: ${response.code()} - $errorMsg\n\nPlease check your API key in local.properties and rebuild the app.",
                             isUser = false
                         ))
                     }
@@ -196,10 +214,15 @@ class ChatbotFragment : Fragment() {
                     if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
                         chatMessages.removeAt(chatMessages.size - 1)
                     }
-                    chatMessages.add(ChatMessage(
-                        text = "Error: ${e.message ?: "Unknown"}. Check internet and API key.",
-                        isUser = false
-                    ))
+                    val errorMsg = when {
+                        e.message?.contains("Unable to resolve host") == true -> 
+                            "🌐 Network Error\n\nPlease check your internet connection and try again."
+                        e.message?.contains("timeout") == true -> 
+                            "⏱️ Timeout Error\n\nThe request took too long. Please try again."
+                        else -> 
+                            "❌ Error\n\n${e.message ?: "Unknown error"}\n\nPlease check your internet connection and API key."
+                    }
+                    chatMessages.add(ChatMessage(text = errorMsg, isUser = false))
                     chatAdapter.submitList(chatMessages.toList())
                     scrollToBottom()
                 }

@@ -94,22 +94,33 @@ class MoodCheckFragment : Fragment() {
     private fun analyzeEmotion() {
         val inputText = binding.etMoodInput.text.toString().trim()
         if (inputText.isEmpty()) {
-            Toast.makeText(requireContext(), "Please enter how you're feeling", Toast.LENGTH_SHORT).show()
+            binding.tvEmotionResult.text = "💭 Please enter how you're feeling"
+            binding.tvEmotionResult.visibility = View.VISIBLE
+            return
+        }
+
+        if (inputText.length < 3) {
+            binding.tvEmotionResult.text = "💬 Please enter at least 3 characters to analyze your mood"
+            binding.tvEmotionResult.visibility = View.VISIBLE
             return
         }
 
         if (!ApiConfig.isHuggingFaceConfigured()) {
-            Toast.makeText(
-                requireContext(),
-                "⚠️ API key not configured! You need to:\n1. Set GitHub Secrets\n2. Build NEW APK\n3. Install NEW APK\nSee GITHUB_SECRETS_SETUP.md",
-                Toast.LENGTH_LONG
-            ).show()
+            binding.tvEmotionResult.text = 
+                "⚠️ Configuration Required\n\n" +
+                "Hugging Face API key is not configured.\n\n" +
+                "Please add your API key to local.properties and rebuild the app."
+            binding.tvEmotionResult.visibility = View.VISIBLE
             return
         }
 
         val service = emotionService
         if (service == null) {
-            Toast.makeText(requireContext(), "Mood service not available. Please restart the app.", Toast.LENGTH_SHORT).show()
+            binding.tvEmotionResult.text = 
+                "❌ Service Error\n\n" +
+                "Mood service is not available.\n" +
+                "Please restart the app."
+            binding.tvEmotionResult.visibility = View.VISIBLE
             return
         }
 
@@ -129,23 +140,39 @@ class MoodCheckFragment : Fragment() {
                     _binding?.btnAnalyze?.isEnabled = true
                     if (response.isSuccessful) {
                         val emotions = response.body()
-                        if (emotions != null) {
+                        if (emotions != null && emotions.isNotEmpty()) {
                             displayEmotionResults(emotions, inputText)
                             correlateWithUsage(emotions)
                         } else {
-                            if (isAdded) Toast.makeText(requireContext(), "Error: No response from API", Toast.LENGTH_SHORT).show()
+                            _binding?.tvEmotionResult?.text = "❌ No Response\n\nThe API returned an empty response. Please try again."
+                            _binding?.tvEmotionResult?.visibility = View.VISIBLE
                         }
                     } else {
-                        if (isAdded) Toast.makeText(requireContext(), "Error: ${response.message()}", Toast.LENGTH_LONG).show()
+                        val errorMsg = when (response.code()) {
+                            401 -> "🔑 Invalid API Key\n\nYour Hugging Face API key is invalid or expired.\n\nGet a new key at:\nhttps://huggingface.co/settings/tokens"
+                            503 -> "⏳ Model Loading\n\nThe emotion detection model is loading.\n\nPlease wait 30 seconds and try again."
+                            else -> "❌ API Error ${response.code()}\n\n${response.message()}\n\nPlease check your API key and internet connection."
+                        }
+                        _binding?.tvEmotionResult?.text = errorMsg
+                        _binding?.tvEmotionResult?.visibility = View.VISIBLE
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _binding?.progressBar?.visibility = View.GONE
                     _binding?.btnAnalyze?.isEnabled = true
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "Error: ${e.message}. Check internet and API key.", Toast.LENGTH_LONG).show()
+                    val errorMsg = when {
+                        e.message?.contains("Unable to resolve host") == true -> 
+                            "🌐 Network Error\n\nPlease check your internet connection and try again."
+                        e.message?.contains("timeout") == true -> 
+                            "⏱️ Timeout Error\n\nThe request took too long. Please try again."
+                        e.message?.contains("410") == true || e.message?.contains("Gone") == true ->
+                            "⚠️ API Update Required\n\nThe Hugging Face API has been updated.\n\nPlease get a new API key at:\nhttps://huggingface.co/settings/tokens"
+                        else -> 
+                            "❌ Error\n\n${e.message ?: "Unknown error"}\n\nPlease check your internet connection and API key."
                     }
+                    _binding?.tvEmotionResult?.text = errorMsg
+                    _binding?.tvEmotionResult?.visibility = View.VISIBLE
                 }
             }
         }
@@ -159,18 +186,21 @@ class MoodCheckFragment : Fragment() {
         val sortedEmotions = emotions.sortedByDescending { it.score }
         val topEmotion = sortedEmotions.first()
         val emotionText = buildString {
-            append("Detected Emotion: ${topEmotion.label.uppercase()}\n\n")
-            append("Confidence Scores:\n")
+            append("🎯 Primary Emotion: ${topEmotion.label.replaceFirstChar { it.uppercase() }}\n\n")
+            append("📊 Confidence Breakdown:\n\n")
             sortedEmotions.forEach { emotion ->
                 val percentage = (emotion.score * 100).toInt()
-                append("• ${emotion.label}: $percentage%\n")
+                val bar = "█".repeat(percentage / 5)
+                append("${emotion.label.padEnd(10)} $bar $percentage%\n")
             }
+            append("\n💬 What you said:\n\"$inputText\"")
         }
         _binding?.tvEmotionResult?.text = emotionText
         _binding?.tvEmotionResult?.visibility = View.VISIBLE
         val emoji = getEmotionEmoji(topEmotion.label)
-        _binding?.tvEmotionEmoji?.text = emoji
+        _binding?.tvEmotionEmoji?.text = "$emoji"
         _binding?.tvEmotionEmoji?.visibility = View.VISIBLE
+        _binding?.tvEmotionEmoji?.textSize = 48f
     }
 
     /**
@@ -219,38 +249,62 @@ class MoodCheckFragment : Fragment() {
         val socialMediaTimeFormatted = UsageStatsHelper.formatTime(socialMediaTime)
         
         val correlation = buildString {
-            append("📊 Usage Correlation:\n\n")
-            append("You seem ${emotionLower} and your usage today:\n")
-            append("• Total screen time: $totalTimeFormatted\n")
-            append("• Social media: $socialMediaTimeFormatted\n")
+            append("📊 DIGITAL WELLBEING INSIGHTS\n")
+            append("═".repeat(30) + "\n\n")
+            append("😊 Emotion: ${emotion.replaceFirstChar { it.uppercase() }}\n\n")
+            append("📱 Today's Usage:\n")
+            append("   ⏱️  Screen Time: $totalTimeFormatted\n")
+            append("   📱 Social Media: $socialMediaTimeFormatted\n")
             
             if (topApps.isNotEmpty()) {
-                append("• Top apps: ${topApps.joinToString(", ") { it.appName }}\n")
+                append("   🔝 Top Apps: ${topApps.take(2).joinToString(", ") { it.appName }}\n")
             }
             
-            append("\n")
+            append("\n" + "─".repeat(30) + "\n\n")
             
-            // Add insights based on emotion
+            // Add personalized insights
             when {
-                emotionLower.contains("sad") || emotionLower.contains("anxious") || 
-                emotionLower.contains("stressed") -> {
+                emotionLower.contains("sad") || emotionLower.contains("anger") || 
+                emotionLower.contains("fear") -> {
                     val threeHours = 3 * 60 * 60 * 1000L
+                    append("💭 PERSONALIZED ADVICE:\n\n")
                     if (socialMediaTime > threeHours) {
-                        append("💡 Insight: High social media usage ($socialMediaTimeFormatted) " +
-                                "might be contributing to your ${emotionLower} feelings. " +
-                                "Consider taking breaks and limiting social media time.")
+                        append("⚠️ We noticed you've spent $socialMediaTimeFormatted on social media today.\n\n" +
+                                "High social media use has been linked to negative emotions. Try:\n\n" +
+                                "• Taking a 30-minute break\n" +
+                                "• Going for a walk outside\n" +
+                                "• Calling a friend or family member\n" +
+                                "• Practicing mindfulness or meditation")
                     } else {
-                        append("💡 Insight: Consider engaging in activities that boost your mood, " +
-                                "like exercise, hobbies, or connecting with friends offline.")
+                        append("While your screen time seems moderate, when feeling $emotionLower, try:\n\n" +
+                                "• Physical activity or exercise\n" +
+                                "• Talking to someone you trust\n" +
+                                "• Engaging in a creative hobby\n" +
+                                "• Spending time in nature")
                     }
                 }
                 emotionLower.contains("happy") || emotionLower.contains("joy") -> {
-                    append("💡 Insight: Great to see you're feeling positive! " +
-                            "Keep maintaining a healthy balance between screen time and real-world activities.")
+                    append("💡 KEEP IT UP!\n\n" +
+                            "Great to see you're feeling positive! To maintain this:\n\n" +
+                            "• Continue balanced screen time habits\n" +
+                            "• Stay connected with loved ones\n" +
+                            "• Keep doing what makes you happy\n" +
+                            "• Share positivity with others")
+                }
+                emotionLower.contains("surprise") -> {
+                    append("💡 INTERESTING!\n\n" +
+                            "Feeling surprised? That's great! It means you're experiencing new things.\n\n" +
+                            "• Use this energy productively\n" +
+                            "• Learn something new\n" +
+                            "• Stay curious and open-minded")
                 }
                 else -> {
-                    append("💡 Insight: Monitor your screen time patterns and ensure " +
-                            "you're taking regular breaks from digital devices.")
+                    append("💡 DIGITAL BALANCE TIP:\n\n" +
+                            "To maintain good digital wellbeing:\n\n" +
+                            "• Take regular breaks (20-20-20 rule)\n" +
+                            "• Set app time limits\n" +
+                            "• Practice mindful usage\n" +
+                            "• Prioritize face-to-face connections")
                 }
             }
         }
