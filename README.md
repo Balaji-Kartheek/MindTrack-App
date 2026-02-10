@@ -2,6 +2,22 @@
 
 A comprehensive Android application for tracking app usage, AI-powered digital wellbeing assistance, and emotion detection. Built with Kotlin and Material Design.
 
+## 🔐 IMPORTANT: API Keys Configuration Required
+
+**Before building or using this app, you MUST configure API keys.**
+
+For GitHub Actions builds (recommended):
+📖 **[Set up GitHub Secrets - Click Here →](./GITHUB_SECRETS_SETUP.md)**
+
+For local builds:
+📖 **[Local API Keys Setup →](./API_KEYS_SETUP.md)**
+
+The app requires valid API keys for:
+- **Google Gemini AI** (for chatbot functionality)
+- **Hugging Face** (for emotion detection)
+
+Without proper configuration, the app will show "Please configure API key" errors.
+
 ## Features
 
 ### 1. Usage Statistics Tracking
@@ -85,17 +101,31 @@ MindApp/
 
 ### Step 2: Configure API Keys
 
-1. Open `app/src/main/java/com/mindapp/ApiConfig.kt`
-2. Replace `YOUR_GEMINI_API_KEY_HERE` with your Gemini API key
-3. Replace `YOUR_HUGGING_FACE_API_KEY_HERE` with your Hugging Face API key
+**IMPORTANT:** API keys are now configured via **environment variables** or **GitHub Secrets**, not hardcoded in files.
 
-```kotlin
-object ApiConfig {
-    const val GEMINI_API_KEY = "your-actual-gemini-api-key-here"
-    const val HUGGING_FACE_API_KEY = "your-actual-hugging-face-token-here"
-    // ...
-}
+#### For GitHub Actions (Recommended):
+Follow the **[GitHub Secrets Setup Guide](./GITHUB_SECRETS_SETUP.md)** to:
+1. Add your API keys as GitHub Secrets
+2. The build workflow will automatically inject them during APK build
+
+#### For Local Builds:
+Set environment variables before building:
+
+**On Linux/Mac:**
+```bash
+export GEMINI_API_KEY="your_gemini_api_key_here"
+export HUGGING_FACE_API_KEY="your_hugging_face_token_here"
+./gradlew assembleDebug
 ```
+
+**On Windows (PowerShell):**
+```powershell
+$env:GEMINI_API_KEY="your_gemini_api_key_here"
+$env:HUGGING_FACE_API_KEY="your_hugging_face_token_here"
+.\gradlew.bat assembleDebug
+```
+
+**Note:** The `ApiConfig.kt` file now reads from `BuildConfig`, which is generated at build time with your API keys.
 
 ### Step 3: Grant Permissions
 
@@ -114,10 +144,12 @@ When you first launch the app:
 3. Connect your Android device or start an emulator
 4. Click "Run" or press Shift+F10
 
-#### Option B: Build with GitHub Actions
-1. Push your code to a GitHub repository
-2. GitHub Actions will automatically build the APK on push to `main` branch
-3. Download the APK from the Actions tab → Artifacts
+#### Option B: Build with GitHub Actions (Recommended)
+1. **⚠️ Configure GitHub Secrets first** - Follow [GITHUB_SECRETS_SETUP.md](./GITHUB_SECRETS_SETUP.md)
+2. Push your code to a GitHub repository
+3. GitHub Actions will automatically build the APK with your API keys injected
+4. Download the APK from the Actions tab → Artifacts
+5. Install and use the APK with working AI features
 
 ## Usage
 

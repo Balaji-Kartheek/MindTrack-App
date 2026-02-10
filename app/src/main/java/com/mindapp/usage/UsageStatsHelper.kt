@@ -65,8 +65,9 @@ object UsageStatsHelper {
             val startTime = calendar.timeInMillis
             val endTime = System.currentTimeMillis()
             
+            // Use INTERVAL_BEST for more accurate stats across different devices
             val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
+                UsageStatsManager.INTERVAL_BEST,
                 startTime,
                 endTime
             )
@@ -74,15 +75,28 @@ object UsageStatsHelper {
             val packageManager = context.packageManager
             val appUsageMap = mutableMapOf<String, AppUsageInfo>()
 
+        // Process stats - some devices return duplicates, so aggregate by package name
         stats?.forEach { usageStat ->
             val packageName = usageStat.packageName
             
-            // Skip system apps and this app itself
+            // Skip this app itself
             if (packageName == context.packageName) return@forEach
             
             try {
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                if (appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0) return@forEach
+                val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+                
+                // Allow both user apps and some system apps (don't skip all system apps)
+                // This ensures we track apps like YouTube, WhatsApp, etc.
+                val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                
+                // Skip only pure system apps (not updated system apps like YouTube, Chrome, etc.)
+                if (isSystemApp && !isUpdatedSystemApp) {
+                    // Still allow social media system apps
+                    if (!SOCIAL_MEDIA_PACKAGES.contains(packageName)) {
+                        return@forEach
+                    }
+                }
                 
                 val appName = packageManager.getApplicationLabel(appInfo).toString()
                 val totalTime = usageStat.totalTimeInForeground
@@ -106,6 +120,8 @@ object UsageStatsHelper {
                 }
             } catch (e: PackageManager.NameNotFoundException) {
                 // App not found, skip
+            } catch (e: Exception) {
+                // Skip on any error for this app
             }
         }
 
