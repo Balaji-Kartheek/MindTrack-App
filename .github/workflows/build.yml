@@ -75,6 +75,9 @@ jobs:
           echo "wrapper jar size: $(stat -c%s gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo 'N/A') bytes"
 
       - name: Build debug APK
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
