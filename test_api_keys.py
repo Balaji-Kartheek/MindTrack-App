@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Quick API Key Tester for MindApp
 Run this to test your API keys without building the Android app.
@@ -9,6 +10,11 @@ Usage: python test_api_keys.py
 import requests
 import json
 import sys
+import io
+
+# Fix Windows console encoding
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Read API keys from .env file
 def read_env_file():
@@ -30,7 +36,7 @@ def test_gemini_api(api_key):
     print("\n🔍 Testing Gemini API...")
     print(f"Key: {api_key[:20]}...")
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     payload = {
         "contents": [{

@@ -1,138 +1,123 @@
-# Quick Start Guide
+# Quick Start - Testing Your API Keys
 
-## Step-by-Step Setup
+## ✅ What Was Done
 
-### 1. Get API Keys (5 minutes)
+1. **Fixed `build.gradle`** - Now reads from `local.properties`
+2. **Created `local.properties`** - Your API keys are there
+3. **Added Test Tools** - Scripts to verify APIs work
+4. **Pushed to GitHub** - All changes committed
 
-#### Gemini API Key
-1. Go to https://makersuite.google.com/app/apikey
-2. Sign in with Google
-3. Click "Create API Key"
+---
+
+## 🧪 Test API Keys in Terminal
+
+### Option 1: Python Test (Easiest)
+
+```bash
+python test_api_keys.py
+```
+
+### Option 2: PowerShell (Windows)
+
+Copy-paste this into PowerShell:
+
+**Test Gemini:**
+```powershell
+# Replace YOUR_GEMINI_KEY with your actual key
+$body = '{"contents":[{"parts":[{"text":"Hello"}]}]}'
+Invoke-RestMethod -Uri "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=YOUR_GEMINI_KEY" -Method Post -Body $body -ContentType "application/json" | ConvertTo-Json
+```
+
+**Test Hugging Face:**
+```powershell
+# Replace YOUR_HF_KEY with your actual key
+$headers = @{"Authorization"="Bearer YOUR_HF_KEY"}
+$body = '{"inputs":"I feel happy"}'
+Invoke-RestMethod -Uri "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base" -Method Post -Headers $headers -Body $body -ContentType "application/json" | ConvertTo-Json
+```
+
+---
+
+## ⚠️ If You Get Errors (404/401)
+
+Your API keys might be **invalid or expired**. Get new ones:
+
+### Get New Gemini Key:
+1. Go to: **https://makersuite.google.com/app/apikey**
+2. Click "Create API Key"
+3. Copy the key
+
+### Get New Hugging Face Key:
+1. Go to: **https://huggingface.co/settings/tokens**
+2. Click "New token"
+3. Select "Read" permission
 4. Copy the key
 
-#### Hugging Face Token
-1. Go to https://huggingface.co/settings/tokens
-2. Sign in or create account
-3. Click "New token"
-4. Name it "MindApp"
-5. Select "Read" permission
-6. Copy the token
+### Update Keys:
 
-### 2. Configure API Keys (1 minute)
+Edit `local.properties`:
+```properties
+GEMINI_API_KEY=your_new_gemini_key_here
+HUGGING_FACE_API_KEY=your_new_hf_key_here
+```
 
-1. Open `app/src/main/java/com/mindapp/ApiConfig.kt`
-2. Find these lines:
-   ```kotlin
-   const val GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
-   const val HUGGING_FACE_API_KEY = "YOUR_HUGGING_FACE_API_KEY_HERE"
-   ```
-3. Replace with your actual keys:
-   ```kotlin
-   const val GEMINI_API_KEY = "AIzaSy..." // Your actual key
-   const val HUGGING_FACE_API_KEY = "hf_..." // Your actual token
-   ```
+---
 
-### 3. Build the App
+## 🏗️ Build & Test the App
 
-#### Option A: Android Studio (Recommended for testing)
-1. Open Android Studio
-2. File → Open → Select this project folder
-3. Wait for Gradle sync
-4. Click Run (green play button)
-5. Select device/emulator
+Once APIs work in terminal:
 
-#### Option B: GitHub Actions (For APK)
-1. Push code to GitHub repository
-2. Go to Actions tab
-3. Wait for workflow to complete
-4. Download APK from Artifacts
+```bash
+# Clean build
+.\gradlew clean
 
-### 4. First Launch
+# Build APK
+.\gradlew assembleDebug
 
-1. Install APK on device (or run from Android Studio)
-2. App will request Usage Stats permission
-3. Tap "Open Settings"
-4. Find "MindApp" in the list
-5. Toggle the switch ON
-6. Return to app
+# Install
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-### 5. Test Features
+Then test in the app:
+- **Chatbot tab** - Send a message
+- **Mood tab** - Analyze emotion
 
-#### Usage Tab
-- Tap "Refresh" button
-- Should show screen time and top apps
-- If social media > 3 hours, you'll get a notification
+---
 
-#### Chat Tab
-- Type: "How can I reduce my screen time?"
-- Wait for AI response
-- Try asking about your usage patterns
+## 📁 Files Created
 
-#### Mood Tab
-- Type: "I'm feeling stressed about my exams"
-- Tap "Analyze Emotion"
-- View emotion results and correlation with usage
+- `ApiTester.kt` - API testing utility
+- `ApiTestFragment.kt` - In-app test screen (optional)
+- `local.properties` - Your API keys (gitignored)
+- `test_api_keys.py` - Python test script
+- `test_api_keys.ps1` - PowerShell test script
+- `API_TESTING_GUIDE.md` - Full testing guide
+- `TERMINAL_API_TEST.md` - Terminal test instructions
 
-## Troubleshooting
+---
 
-### "Please configure your API key" error
-- Check `ApiConfig.kt` - keys must be set
-- No quotes around keys, just the key itself
-- Restart app after changing keys
+## 🎯 Next Steps
 
-### Usage stats not showing
-- Grant Usage Stats permission in Settings
-- Restart app
-- Tap Refresh button
+1. **Test APIs in terminal** (see commands above)
+2. **If they work** → Rebuild app → Test in app
+3. **If they fail** → Get new API keys → Update local.properties → Test again
 
-### API errors
-- Check internet connection
-- Verify API keys are correct
-- Check API quotas/limits
+---
 
-### Build errors
-- Ensure JDK 17 is installed
-- Run `./gradlew clean` then rebuild
-- Check Android Studio SDK settings
+## 💡 Key Learning
 
-## File Locations Reference
+- **.env doesn't work in Android** → Use `local.properties`
+- **Keys are compiled at build time** → Need to rebuild after changing keys
+- **Test in terminal first** → Faster than rebuilding the app
+- **local.properties is gitignored** → Safe for local development
 
-- **API Keys**: `app/src/main/java/com/mindapp/ApiConfig.kt`
-- **Main Code**: `app/src/main/java/com/mindapp/`
-- **Layouts**: `app/src/main/res/layout/`
-- **Build Config**: `app/build.gradle`
-- **Manifest**: `app/src/main/AndroidManifest.xml`
+---
 
-## Presentation Tips
+## Need Help?
 
-1. **Demo Flow**:
-   - Show Usage tab with real data
-   - Demonstrate chatbot asking about wellbeing
-   - Show emotion detection with correlation
+Check these files:
+- `API_TESTING_GUIDE.md` - Comprehensive guide
+- `TERMINAL_API_TEST.md` - Terminal testing methods
+- `API_KEYS_SETUP.md` - Original API keys setup
 
-2. **Key Points to Highlight**:
-   - UsageStatsManager API for tracking
-   - Gemini API for AI responses
-   - Hugging Face for emotion detection
-   - Material Design UI
-   - GitHub Actions CI/CD
-
-3. **Code Highlights**:
-   - `UsageStatsHelper.kt` - Core tracking logic
-   - `ChatbotFragment.kt` - AI integration
-   - `MoodCheckFragment.kt` - Emotion detection
-   - `ApiConfig.kt` - Configuration management
-
-## Common Questions
-
-**Q: Why Usage Stats permission?**
-A: Android requires special permission to track app usage for privacy reasons.
-
-**Q: Can I use this without API keys?**
-A: Usage tracking works, but Chat and Mood features need API keys.
-
-**Q: How do I get the APK?**
-A: Build locally or use GitHub Actions - APK will be in `app/build/outputs/apk/debug/`
-
-**Q: What Android version is needed?**
-A: Android 8.0 (API 26) or higher.
+The API keys in your `.env` are now in `local.properties` and the app will use them after rebuilding!

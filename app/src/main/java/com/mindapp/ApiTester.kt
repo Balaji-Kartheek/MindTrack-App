@@ -23,7 +23,7 @@ object ApiTester {
      */
     suspend fun testGeminiApi(apiKey: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         try {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$apiKey"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
             
             val jsonBody = JSONObject().apply {
                 put("contents", JSONArray().apply {

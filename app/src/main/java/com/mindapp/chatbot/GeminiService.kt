@@ -21,7 +21,7 @@ interface GeminiService {
      * @param request The chat request body
      * @return Response containing the AI-generated message
      */
-    @POST("models/gemini-pro:generateContent")
+    @POST("models/gemini-2.5-flash:generateContent")
     suspend fun generateContent(
         @Query("key") apiKey: String = ApiConfig.GEMINI_API_KEY,
         @Body request: GeminiRequest

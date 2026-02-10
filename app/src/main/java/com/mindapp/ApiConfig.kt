@@ -28,6 +28,7 @@ object ApiConfig {
     const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/"
     
     // Hugging Face API endpoint for emotion detection
+    // Note: If you get 410 errors, the HF API key might be invalid or expired
     const val HUGGING_FACE_BASE_URL = "https://api-inference.huggingface.co/models/"
     const val EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
     
