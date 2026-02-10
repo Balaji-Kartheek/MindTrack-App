@@ -16,6 +16,13 @@ import io
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# Try importing huggingface_hub for better API support
+try:
+    from huggingface_hub import InferenceClient
+    HAS_HF_HUB = True
+except ImportError:
+    HAS_HF_HUB = False
+
 # Read API keys from .env file
 def read_env_file():
     keys = {}
@@ -74,6 +81,25 @@ def test_huggingface_api(api_key):
     print("\n🔍 Testing Hugging Face API...")
     print(f"Key: {api_key[:20]}...")
     
+    # Method 1: Try using official InferenceClient if available
+    if HAS_HF_HUB:
+        try:
+            print("Using InferenceClient...")
+            client = InferenceClient(
+                model="j-hartmann/emotion-english-distilroberta-base",
+                token=api_key
+            )
+            result = client.text_classification("I am feeling happy today")
+            print(f"✅ Hugging Face API Working!")
+            print("Detected emotions:")
+            for emotion in result[:3]:
+                print(f"  • {emotion['label']}: {emotion['score']*100:.1f}%")
+            return True
+        except Exception as e:
+            print(f"InferenceClient failed: {e}")
+            print("Falling back to direct API call...")
+    
+    # Method 2: Direct API call
     url = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base"
     
     headers = {
@@ -94,9 +120,14 @@ def test_huggingface_api(api_key):
             for emotion in data[:3]:  # Show top 3 emotions
                 print(f"  • {emotion['label']}: {emotion['score']*100:.1f}%")
             return True
+        elif response.status_code == 503:
+            print(f"⏳ Model is loading (503). Please wait 30 seconds and try again.")
+            return False
         else:
             print(f"❌ API Error: {response.status_code}")
             print(f"Response: {response.text}")
+            print(f"\n💡 Tip: Your HF API key might be expired. Get a new one at:")
+            print(f"   https://huggingface.co/settings/tokens")
             return False
             
     except requests.exceptions.RequestException as e:
