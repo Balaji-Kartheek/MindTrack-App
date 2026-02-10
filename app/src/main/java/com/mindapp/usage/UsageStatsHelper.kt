@@ -25,9 +25,14 @@ object UsageStatsHelper {
         "com.zhiliaoapp.musically", // TikTok
         "com.snapchat.android",
         "com.whatsapp",
+        "com.whatsapp.w4b", // WhatsApp Business
         "org.telegram.messenger",
         "com.reddit.frontpage",
-        "com.google.android.youtube"
+        "com.google.android.youtube",
+        "com.google.android.apps.youtube.music",
+        "com.twitter.android.lite",
+        "com.facebook.lite",
+        "com.facebook.mlite" // Facebook Lite/Messenger Lite
     )
 
     /**
@@ -117,11 +122,20 @@ object UsageStatsHelper {
                 // 1. All user-installed apps
                 // 2. Updated system apps (like Chrome, YouTube)
                 // 3. Explicitly listed social media apps
+                // 4. Common messaging and media apps
                 val shouldInclude = when {
                     !isSystemApp -> true // User apps
                     isUpdatedSystemApp -> true // Updated system apps
                     SOCIAL_MEDIA_PACKAGES.contains(packageName) -> true // Social media
-                    packageName.contains("com.android.chrome") -> true // Chrome
+                    packageName.contains("whatsapp") -> true // Any WhatsApp variant
+                    packageName.contains("chrome") -> true // Chrome
+                    packageName.contains("youtube") -> true // YouTube
+                    packageName.contains("instagram") -> true // Instagram
+                    packageName.contains("facebook") -> true // Facebook
+                    packageName.contains("twitter") -> true // Twitter
+                    packageName.contains("telegram") -> true // Telegram
+                    packageName.contains("snapchat") -> true // Snapchat
+                    packageName.contains("tiktok") -> true // TikTok
                     packageName.contains("com.google.android") -> true // Google apps
                     else -> false // Skip other system apps
                 }

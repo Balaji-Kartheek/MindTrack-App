@@ -135,7 +135,7 @@ class ChatbotFragment : Fragment() {
         if (!ApiConfig.isGeminiConfigured()) {
             Toast.makeText(
                 requireContext(),
-                "Please configure your Gemini API key in ApiConfig.kt and rebuild the app.",
+                "⚠️ API key not configured! You need to:\n1. Set GitHub Secrets\n2. Build NEW APK\n3. Install NEW APK\nSee GITHUB_SECRETS_SETUP.md",
                 Toast.LENGTH_LONG
             ).show()
             return
