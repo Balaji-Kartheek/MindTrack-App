@@ -1,18 +1,22 @@
 package com.mindapp.usage
 
-import android.app.usage.UsageStats
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.provider.Settings
 import java.util.Calendar
 
 /**
  * Helper class for managing app usage statistics
  * 
- * This class uses Android's UsageStatsManager API to track app usage
- * and categorize apps into different types (Social Media, Productivity, etc.)
+ * Uses queryEvents() (like Digital Wellbeing) instead of queryUsageStats()
+ * to get accurate real-time foreground usage data.
+ * 
+ * How it works:
+ * - queryEvents() returns individual MOVE_TO_FOREGROUND / MOVE_TO_BACKGROUND events
+ * - We calculate each app's foreground time by pairing these events
+ * - This gives the same real-time accuracy as Android's Digital Wellbeing screen
  */
 object UsageStatsHelper {
 
@@ -35,9 +39,18 @@ object UsageStatsHelper {
         "com.facebook.mlite" // Facebook Lite/Messenger Lite
     )
 
+    // System packages to always exclude (launchers, OS internals)
+    private val EXCLUDED_PACKAGES = setOf(
+        "android",
+        "com.android.systemui",
+        "com.android.launcher",
+        "com.android.launcher3",
+        "com.google.android.permissioncontroller",
+        "com.android.providers.settings"
+    )
+
     /**
      * Checks if Usage Stats permission is granted.
-     * Returns false on any error to avoid crashes on devices with different APIs.
      */
     fun hasUsageStatsPermission(context: Context): Boolean {
         return try {
@@ -55,14 +68,24 @@ object UsageStatsHelper {
     }
 
     /**
-     * Gets usage stats for today. Returns empty list on any error to avoid crashes.
+     * Gets usage stats for today using queryEvents() for real-time accuracy.
+     * 
+     * KEY CONCEPT (learn this!):
+     * - queryUsageStats() returns cached/aggregated data → often stale, not real-time
+     * - queryEvents() returns raw FOREGROUND/BACKGROUND events → always accurate
+     * - Digital Wellbeing on your phone uses this same events-based approach
+     * 
+     * We track each app's foreground time by:
+     * 1. Recording when an app moves to foreground (start timestamp)
+     * 2. When it moves to background, calculate duration = background_time - foreground_time
+     * 3. Sum all durations per app
      */
     fun getTodayUsageStats(context: Context): List<AppUsageInfo> {
         return try {
             val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
                 ?: return emptyList()
             
-            // Get data for the entire day (midnight to now)
+            // Query from midnight to now
             val calendar = Calendar.getInstance()
             calendar.set(Calendar.HOUR_OF_DAY, 0)
             calendar.set(Calendar.MINUTE, 0)
@@ -71,112 +94,81 @@ object UsageStatsHelper {
             val startTime = calendar.timeInMillis
             val endTime = System.currentTimeMillis()
             
-            android.util.Log.d("UsageStatsHelper", "Querying from: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(startTime)} to ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(endTime)}")
+            // queryEvents gives us individual FOREGROUND/BACKGROUND events - real-time!
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
             
-            // Query with INTERVAL_DAILY for most reliable results
-            // This gives aggregated data for the day
-            val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                startTime,
-                endTime
-            )
+            // Track foreground start times per package
+            val foregroundStartMap = mutableMapOf<String, Long>()
+            // Accumulate total foreground time per package
+            val totalTimeMap = mutableMapOf<String, Long>()
             
-            // Also try getting recent detailed stats (last hour) for real-time updates
-            val recentStart = System.currentTimeMillis() - (60 * 60 * 1000) // Last hour
-            val recentStats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_BEST,
-                recentStart,
-                endTime
-            )
-            
-            // Combine both stats
-            val combinedStats = (stats.orEmpty() + recentStats.orEmpty())
-            
-            android.util.Log.d("UsageStatsHelper", "Total stats entries: ${combinedStats.size} (daily: ${stats?.size ?: 0}, recent: ${recentStats?.size ?: 0})")
-
-            val packageManager = context.packageManager
-            val appUsageMap = mutableMapOf<String, AppUsageInfo>()
-
-        // Process stats - some devices return duplicates, so aggregate by package name
-        var totalAppsProcessed = 0
-        var appsWithUsage = 0
-        
-        combinedStats.forEach { usageStat ->
-            totalAppsProcessed++
-            val packageName = usageStat.packageName
-            val totalTime = usageStat.totalTimeInForeground
-            
-            // Log all apps with usage (for debugging)
-            if (totalTime > 0) {
-                android.util.Log.d("UsageStatsHelper", "App: $packageName, Time: ${formatTime(totalTime)}")
+            val event = UsageEvents.Event()
+            while (usageEvents.hasNextEvent()) {
+                usageEvents.getNextEvent(event)
+                val pkg = event.packageName ?: continue
+                
+                when (event.eventType) {
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        // App came to foreground - record the start time
+                        foregroundStartMap[pkg] = event.timeStamp
+                    }
+                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                        // App went to background - calculate how long it was in foreground
+                        val startTs = foregroundStartMap.remove(pkg)
+                        if (startTs != null && event.timeStamp > startTs) {
+                            val duration = event.timeStamp - startTs
+                            totalTimeMap[pkg] = (totalTimeMap[pkg] ?: 0L) + duration
+                        }
+                    }
+                }
             }
             
-            // Skip this app itself
-            if (packageName == context.packageName) return@forEach
-            
-            // Skip apps with no usage
-            if (totalTime <= 0) return@forEach
-            
-            try {
-                val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                
-                // Check if it's a system app
-                val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                
-                // More lenient filtering - include:
-                // 1. All user-installed apps
-                // 2. Updated system apps (like Chrome, YouTube)
-                // 3. Explicitly listed social media apps
-                // 4. Common messaging and media apps
-                val shouldInclude = when {
-                    !isSystemApp -> true // User apps
-                    isUpdatedSystemApp -> true // Updated system apps
-                    SOCIAL_MEDIA_PACKAGES.contains(packageName) -> true // Social media
-                    packageName.contains("whatsapp") -> true // Any WhatsApp variant
-                    packageName.contains("chrome") -> true // Chrome
-                    packageName.contains("youtube") -> true // YouTube
-                    packageName.contains("instagram") -> true // Instagram
-                    packageName.contains("facebook") -> true // Facebook
-                    packageName.contains("twitter") -> true // Twitter
-                    packageName.contains("telegram") -> true // Telegram
-                    packageName.contains("snapchat") -> true // Snapchat
-                    packageName.contains("tiktok") -> true // TikTok
-                    packageName.contains("com.google.android") -> true // Google apps
-                    else -> false // Skip other system apps
+            // For apps still in foreground (no BACKGROUND event yet), count time until now
+            val now = System.currentTimeMillis()
+            for ((pkg, startTs) in foregroundStartMap) {
+                if (now > startTs) {
+                    val duration = now - startTs
+                    totalTimeMap[pkg] = (totalTimeMap[pkg] ?: 0L) + duration
                 }
+            }
+            
+            android.util.Log.d("UsageStatsHelper", "Events query: ${totalTimeMap.size} apps with foreground time")
+
+            val packageManager = context.packageManager
+            val appUsageList = mutableListOf<AppUsageInfo>()
+
+            for ((packageName, totalTime) in totalTimeMap) {
+                // Skip our own app
+                if (packageName == context.packageName) continue
+                // Skip excluded system internals
+                if (EXCLUDED_PACKAGES.contains(packageName)) continue
+                // Skip apps with less than 1 minute usage
+                if (totalTime < 60_000) continue
                 
-                if (!shouldInclude) return@forEach
-                
-                val appName = packageManager.getApplicationLabel(appInfo).toString()
-                appsWithUsage++
-                
-                val existing = appUsageMap[packageName]
-                if (existing != null) {
-                    // Create new instance with updated totalTime (data class is immutable)
-                    appUsageMap[packageName] = existing.copy(
-                        totalTime = existing.totalTime + totalTime
-                    )
-                } else {
+                try {
+                    val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                    val appName = packageManager.getApplicationLabel(appInfo).toString()
                     val category = getAppCategory(packageName)
-                    appUsageMap[packageName] = AppUsageInfo(
+                    
+                    appUsageList.add(AppUsageInfo(
                         packageName = packageName,
                         appName = appName,
                         totalTime = totalTime,
                         category = category
-                    )
+                    ))
+                    
+                    android.util.Log.d("UsageStatsHelper", "App: $appName ($packageName), Time: ${formatTime(totalTime)}")
+                } catch (e: PackageManager.NameNotFoundException) {
+                    // App uninstalled or not found, skip
+                } catch (e: Exception) {
+                    android.util.Log.e("UsageStatsHelper", "Error processing $packageName", e)
                 }
-            } catch (e: PackageManager.NameNotFoundException) {
-                // App not found, skip
-            } catch (e: Exception) {
-                android.util.Log.e("UsageStatsHelper", "Error processing $packageName", e)
             }
-        }
-        
-        android.util.Log.d("UsageStatsHelper", "Processed: $totalAppsProcessed apps, Found with usage: $appsWithUsage apps, Final list: ${appUsageMap.size} apps")
-
-            appUsageMap.values.sortedByDescending { it.totalTime }
+            
+            android.util.Log.d("UsageStatsHelper", "Final list: ${appUsageList.size} apps")
+            appUsageList.sortedByDescending { it.totalTime }
         } catch (e: Exception) {
+            android.util.Log.e("UsageStatsHelper", "getTodayUsageStats failed", e)
             emptyList()
         }
     }
