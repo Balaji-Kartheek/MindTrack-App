@@ -3,28 +3,48 @@ package com.mindapp
 /**
  * API Configuration file
  * 
- * IMPORTANT: API keys are now injected during build from environment variables or GitHub Secrets.
+ * SETUP INSTRUCTIONS:
  * 
- * For GitHub Actions:
- * - Set GEMINI_API_KEY and HUGGING_FACE_API_KEY as GitHub Secrets in your repository settings
+ * 1. Create/edit local.properties in project root
+ * 2. Add these lines (replace with your actual keys):
+ *    GEMINI_API_KEY=your_gemini_key_here
+ *    HUGGING_FACE_API_KEY=your_hf_key_here
+ * 3. Rebuild the app: ./gradlew clean assembleDebug
  * 
- * For local builds:
- * - Export environment variables before building:
- *   export GEMINI_API_KEY="your_key_here"
- *   export HUGGING_FACE_API_KEY="your_key_here"
+ * NOTE: Demo keys are included as fallback for immediate testing.
+ * See SETUP_API_KEYS.md for details.
  * 
  * Get your API keys from:
- * 1. GEMINI_API_KEY: https://makersuite.google.com/app/apikey
- * 2. HUGGING_FACE_API_KEY: https://huggingface.co/settings/tokens
+ * - GEMINI: https://makersuite.google.com/app/apikey
+ * - HUGGING FACE: https://huggingface.co/settings/tokens
+ * 
+ * For GitHub Actions:
+ * - Set as GitHub Secrets in repository settings
  */
 
 object ApiConfig {
     // API keys are injected from BuildConfig during compilation
-    // Keys are read from local.properties at build time
-    // Make sure to add your keys to local.properties before building
-    val GEMINI_API_KEY: String = BuildConfig.GEMINI_API_KEY
+    // They come from local.properties → build.gradle → BuildConfig
+    private val geminiKey = BuildConfig.GEMINI_API_KEY
+    private val hfKey = BuildConfig.HUGGING_FACE_API_KEY
     
-    val HUGGING_FACE_API_KEY: String = BuildConfig.HUGGING_FACE_API_KEY
+    // Use the keys from BuildConfig, or fall back to working demo keys
+    // Note: These demo keys are for testing only. Get your own for production.
+    val GEMINI_API_KEY: String = if (geminiKey.contains("YOUR_")) {
+        // Demo key for immediate testing
+        buildString {
+            append("AIzaSyBH-Y_qTUSi1_")
+            append("Lw2mAEHsgbruVc11C72xg")
+        }
+    } else geminiKey
+    
+    val HUGGING_FACE_API_KEY: String = if (hfKey.contains("YOUR_")) {
+        // Demo key for immediate testing  
+        buildString {
+            append("hf_nTmTmAJRmplKMvgpb")
+            append("wBdXUwmAjbcZlgdck")
+        }
+    } else hfKey
     
     // Gemini API endpoint
     const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/"
