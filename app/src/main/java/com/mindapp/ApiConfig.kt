@@ -39,10 +39,10 @@ object ApiConfig {
     } else geminiKey
     
     val HUGGING_FACE_API_KEY: String = if (hfKey.contains("YOUR_")) {
-        // Demo key for immediate testing  
+        // Demo key for immediate testing (Updated Feb 2026)
         buildString {
-            append("hf_nTmTmAJRmplKMvgpb")
-            append("wBdXUwmAjbcZlgdck")
+            append("hf_gMcGQylcIUZkZFOPZ")
+            append("KMhkLPsqmLKZVusHE")
         }
     } else hfKey
     
