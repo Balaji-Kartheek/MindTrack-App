@@ -25,7 +25,7 @@ interface EmotionService {
     suspend fun detectEmotion(
         @Header("Authorization") authorization: String = "Bearer ${ApiConfig.HUGGING_FACE_API_KEY}",
         @Body request: EmotionRequest
-    ): Response<List<EmotionResult>>
+    ): Response<List<List<EmotionResult>>>
 }
 
 /**

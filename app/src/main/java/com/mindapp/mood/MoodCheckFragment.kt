@@ -139,7 +139,8 @@ class MoodCheckFragment : Fragment() {
                     _binding?.progressBar?.visibility = View.GONE
                     _binding?.btnAnalyze?.isEnabled = true
                     if (response.isSuccessful) {
-                        val emotions = response.body()
+                        // API returns [[{label,score},...]] - unwrap the outer array
+                        val emotions = response.body()?.firstOrNull()
                         if (emotions != null && emotions.isNotEmpty()) {
                             displayEmotionResults(emotions, inputText)
                             correlateWithUsage(emotions)
