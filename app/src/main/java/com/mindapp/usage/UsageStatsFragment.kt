@@ -69,17 +69,30 @@ class UsageStatsFragment : Fragment() {
         _binding?.progressBar?.visibility = View.VISIBLE
         val ctx = context ?: return
         
+        // Show last refresh time
+        val currentTime = java.text.SimpleDateFormat("hh:mm:ss a", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (!UsageStatsHelper.hasUsageStatsPermission(ctx)) {
                     withContext(Dispatchers.Main) {
                         _binding?.progressBar?.visibility = View.GONE
+                        _binding?.tvTotalScreenTime?.text = "Permission Required"
+                        _binding?.tvSocialMediaUsage?.text = "Grant Permission"
                         if (isAdded) {
                             Toast.makeText(
                                 requireContext(),
-                                "Please grant Usage Stats permission in Settings",
+                                "⚠️ Usage Access Required\n\nGo to: Settings → Apps → Special Access → Usage Access → MindApp → Enable\n\nThen restart the app.",
                                 Toast.LENGTH_LONG
                             ).show()
+                            // Open settings
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("UsageStatsFragment", "Can't open settings", e)
+                            }
                         }
                     }
                     return@launch
@@ -91,7 +104,10 @@ class UsageStatsFragment : Fragment() {
 
                 withContext(Dispatchers.Main) {
                     val b = _binding ?: return@withContext
-                    b.tvTotalScreenTime.text = UsageStatsHelper.formatTime(totalScreenTime)
+                    
+                    // Show last update time
+                    val updateText = "Last updated: $currentTime"
+                    b.tvTotalScreenTime.text = "${UsageStatsHelper.formatTime(totalScreenTime)}\n$updateText"
                     b.tvSocialMediaUsage.text = UsageStatsHelper.formatTime(socialMediaUsage)
                     topAppsAdapter.submitList(topApps)
                     
@@ -100,16 +116,17 @@ class UsageStatsFragment : Fragment() {
                         if (isAdded) {
                             Toast.makeText(
                                 requireContext(),
-                                "No usage data yet. Use some apps and check back in 1-2 hours.",
+                                "📊 No usage data found\n\nAndroid needs 5-10 minutes of app usage to collect data.\n\nUse some apps, then tap Refresh.",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
+                        b.tvTotalScreenTime.text = "0m\n$updateText"
                     } else {
                         // Show count of tracked apps
                         if (isAdded) {
                             Toast.makeText(
                                 requireContext(),
-                                "Tracking ${topApps.size} apps today",
+                                "✅ Tracking ${topApps.size} apps (${UsageStatsHelper.formatTime(totalScreenTime)} total)",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }

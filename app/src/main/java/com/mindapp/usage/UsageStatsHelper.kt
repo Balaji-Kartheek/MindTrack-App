@@ -62,6 +62,7 @@ object UsageStatsHelper {
             val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
                 ?: return emptyList()
             
+            // Get data for the entire day (midnight to now)
             val calendar = Calendar.getInstance()
             calendar.set(Calendar.HOUR_OF_DAY, 0)
             calendar.set(Calendar.MINUTE, 0)
@@ -70,23 +71,28 @@ object UsageStatsHelper {
             val startTime = calendar.timeInMillis
             val endTime = System.currentTimeMillis()
             
-            // Try INTERVAL_BEST first, fall back to INTERVAL_DAILY if needed
-            var stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_BEST,
+            android.util.Log.d("UsageStatsHelper", "Querying from: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(startTime)} to ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(endTime)}")
+            
+            // Query with INTERVAL_DAILY for most reliable results
+            // This gives aggregated data for the day
+            val stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
                 startTime,
                 endTime
             )
             
-            // If INTERVAL_BEST returns empty or null, try INTERVAL_DAILY
-            if (stats.isNullOrEmpty()) {
-                stats = usageStatsManager.queryUsageStats(
-                    UsageStatsManager.INTERVAL_DAILY,
-                    startTime,
-                    endTime
-                )
-            }
+            // Also try getting recent detailed stats (last hour) for real-time updates
+            val recentStart = System.currentTimeMillis() - (60 * 60 * 1000) // Last hour
+            val recentStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_BEST,
+                recentStart,
+                endTime
+            )
             
-            android.util.Log.d("UsageStatsHelper", "Total stats entries: ${stats?.size ?: 0}")
+            // Combine both stats
+            val combinedStats = (stats.orEmpty() + recentStats.orEmpty())
+            
+            android.util.Log.d("UsageStatsHelper", "Total stats entries: ${combinedStats.size} (daily: ${stats?.size ?: 0}, recent: ${recentStats?.size ?: 0})")
 
             val packageManager = context.packageManager
             val appUsageMap = mutableMapOf<String, AppUsageInfo>()
@@ -95,7 +101,7 @@ object UsageStatsHelper {
         var totalAppsProcessed = 0
         var appsWithUsage = 0
         
-        stats?.forEach { usageStat ->
+        combinedStats.forEach { usageStat ->
             totalAppsProcessed++
             val packageName = usageStat.packageName
             val totalTime = usageStat.totalTimeInForeground
