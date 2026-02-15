@@ -80,6 +80,13 @@ object UsageStatsHelper {
      * 2. When it moves to background, calculate duration = background_time - foreground_time
      * 3. Sum all durations per app
      */
+    /**
+     * Gets usage stats for today.
+     * 
+     * Uses queryAndAggregateUsageStats() which allows the system to do the heavy lifting
+     * of aggregating foreground time. This is generally more robust than manually
+     * parsing events, especially for "Today" views.
+     */
     fun getTodayUsageStats(context: Context): List<AppUsageInfo> {
         return try {
             val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
@@ -94,75 +101,52 @@ object UsageStatsHelper {
             val startTime = calendar.timeInMillis
             val endTime = System.currentTimeMillis()
             
-            // queryEvents gives us individual FOREGROUND/BACKGROUND events - real-time!
-            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            // aggregations: Map<String, UsageStats>
+            val aggregations = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
             
-            // Track foreground start times per package
-            val foregroundStartMap = mutableMapOf<String, Long>()
-            // Accumulate total foreground time per package
-            val totalTimeMap = mutableMapOf<String, Long>()
-            
-            val event = UsageEvents.Event()
-            while (usageEvents.hasNextEvent()) {
-                usageEvents.getNextEvent(event)
-                val pkg = event.packageName ?: continue
-                
-                when (event.eventType) {
-                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                        // App came to foreground - record the start time
-                        foregroundStartMap[pkg] = event.timeStamp
-                    }
-                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                        // App went to background - calculate how long it was in foreground
-                        val startTs = foregroundStartMap.remove(pkg)
-                        if (startTs != null && event.timeStamp > startTs) {
-                            val duration = event.timeStamp - startTs
-                            totalTimeMap[pkg] = (totalTimeMap[pkg] ?: 0L) + duration
-                        }
-                    }
-                }
-            }
-            
-            // For apps still in foreground (no BACKGROUND event yet), count time until now
-            val now = System.currentTimeMillis()
-            for ((pkg, startTs) in foregroundStartMap) {
-                if (now > startTs) {
-                    val duration = now - startTs
-                    totalTimeMap[pkg] = (totalTimeMap[pkg] ?: 0L) + duration
-                }
-            }
-            
-            android.util.Log.d("UsageStatsHelper", "Events query: ${totalTimeMap.size} apps with foreground time")
-
             val packageManager = context.packageManager
             val appUsageList = mutableListOf<AppUsageInfo>()
+            
+            android.util.Log.d("UsageStatsHelper", "Querying stats ($startTime - $endTime). Found ${aggregations.size} records.")
 
-            for ((packageName, totalTime) in totalTimeMap) {
-                // Skip our own app
-                if (packageName == context.packageName) continue
-                // Skip excluded system internals
-                if (EXCLUDED_PACKAGES.contains(packageName)) continue
-                // Skip apps with less than 1 minute usage
+            for ((packageName, stats) in aggregations) {
+                // usageStats.totalTimeInForeground is the key metric
+                val totalTime = stats.totalTimeInForeground
+                
+                // Skip apps with < 1 minute usage to reduce noise
                 if (totalTime < 60_000) continue
                 
+                // Skip our own app and excluded system packages
+                if (packageName == context.packageName) continue
+                if (EXCLUDED_PACKAGES.contains(packageName)) continue
+
+                var appName = packageName
+                // Try to get the real app name
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                    val appName = packageManager.getApplicationLabel(appInfo).toString()
-                    val category = getAppCategory(packageName)
-                    
-                    appUsageList.add(AppUsageInfo(
-                        packageName = packageName,
-                        appName = appName,
-                        totalTime = totalTime,
-                        category = category
-                    ))
-                    
-                    android.util.Log.d("UsageStatsHelper", "App: $appName ($packageName), Time: ${formatTime(totalTime)}")
+                    val label = packageManager.getApplicationLabel(appInfo).toString()
+                    if (label.isNotBlank()) {
+                        appName = label
+                    }
                 } catch (e: PackageManager.NameNotFoundException) {
-                    // App uninstalled or not found, skip
+                    // App might be uninstalled or restricted. 
+                    // We still show it with the package name if it has usage.
+                    // Or we could try to make it prettier.
+                    if (packageName.contains(".")) {
+                        appName = packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.e("UsageStatsHelper", "Error processing $packageName", e)
+                    android.util.Log.w("UsageStatsHelper", "Failed to get label for $packageName", e)
                 }
+
+                val category = getAppCategory(packageName)
+                
+                appUsageList.add(AppUsageInfo(
+                    packageName = packageName,
+                    appName = appName,
+                    totalTime = totalTime,
+                    category = category
+                ))
             }
             
             android.util.Log.d("UsageStatsHelper", "Final list: ${appUsageList.size} apps")
