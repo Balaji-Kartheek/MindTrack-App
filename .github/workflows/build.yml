@@ -9,9 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Use repository secrets: Settings → Secrets and variables → Actions → Repository secrets
-    # (Names: GEMINI_API_KEY, HUGGING_FACE_API_KEY.) If you use Environment secrets instead,
-    # add here: environment: YourEnvName
+    # Secrets can live in Repository secrets OR in Environment "API_KEYS" (both names below).
+    # If keys are only under Environments → API_KEYS, this line is required or env vars stay empty.
+    environment: API_KEYS
 
     steps:
       - name: Checkout code
@@ -84,11 +84,11 @@ jobs:
         run: |
           # Empty secrets → Gradle gets placeholders → ApiConfig uses hardcoded demo keys (often revoked).
           if [ -z "${GEMINI_API_KEY}" ]; then
-            echo "::error::GEMINI_API_KEY is empty. Add a Repository secret (not a Variable) named GEMINI_API_KEY, or attach an Environment to this job and store secrets there."
+            echo "::error::GEMINI_API_KEY is empty. Add Repository secret GEMINI_API_KEY, OR under Environments → API_KEYS → Environment secrets (this workflow uses environment API_KEYS). Use Secrets tab, not Variables."
             exit 1
           fi
           if [ -z "${HUGGING_FACE_API_KEY}" ]; then
-            echo "::error::HUGGING_FACE_API_KEY is empty. Add a Repository secret named HUGGING_FACE_API_KEY."
+            echo "::error::HUGGING_FACE_API_KEY is empty. Add Repository secret HUGGING_FACE_API_KEY or Environment API_KEYS secret with that exact name."
             exit 1
           fi
           echo "API secrets are set for this job (values not printed)."
