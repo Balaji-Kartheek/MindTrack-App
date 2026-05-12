@@ -24,11 +24,14 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
         // Read API keys from:
-        // 1. local.properties (for local development)
-        // 2. Environment variables (for CI/CD)
-        // 3. Use placeholders if neither is set
-        def geminiKey = localProperties.getProperty('GEMINI_API_KEY') ?: System.getenv('GEMINI_API_KEY') ?: 'YOUR_GEMINI_API_KEY_HERE'
-        def huggingFaceKey = localProperties.getProperty('HUGGING_FACE_API_KEY') ?: System.getenv('HUGGING_FACE_API_KEY') ?: 'YOUR_HUGGING_FACE_API_KEY_HERE'
+        // 1. Environment variables first (CI/GitHub Actions injects secrets here)
+        // 2. local.properties (local Android Studio builds)
+        // 3. Placeholders if unset — ApiConfig falls back to demo keys only when placeholder matches YOUR_
+        // trim() avoids invalid keys when secrets were pasted with a trailing newline in GitHub UI
+        def rawGemini = System.getenv('GEMINI_API_KEY') ?: localProperties.getProperty('GEMINI_API_KEY')
+        def rawHf = System.getenv('HUGGING_FACE_API_KEY') ?: localProperties.getProperty('HUGGING_FACE_API_KEY')
+        def geminiKey = rawGemini?.trim() ?: 'YOUR_GEMINI_API_KEY_HERE'
+        def huggingFaceKey = rawHf?.trim() ?: 'YOUR_HUGGING_FACE_API_KEY_HERE'
         
         buildConfigField "String", "GEMINI_API_KEY", "\"${geminiKey}\""
         buildConfigField "String", "HUGGING_FACE_API_KEY", "\"${huggingFaceKey}\""

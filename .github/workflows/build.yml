@@ -74,6 +74,22 @@ jobs:
           echo "wrapper jar exists: $([ -f ./gradle/wrapper/gradle-wrapper.jar ] && echo 'YES' || echo 'NO')"
           echo "wrapper jar size: $(stat -c%s gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo 'N/A') bytes"
 
+      - name: Verify Actions secrets are present
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
+        run: |
+          # Empty secrets → Gradle gets placeholders → ApiConfig uses hardcoded demo keys (often revoked).
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "::error::GEMINI_API_KEY is empty. Add it under Settings → Secrets and variables → Actions (exact name: GEMINI_API_KEY)."
+            exit 1
+          fi
+          if [ -z "${HUGGING_FACE_API_KEY}" ]; then
+            echo "::error::HUGGING_FACE_API_KEY is empty. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "API secrets are set for this job (values not printed)."
+
       - name: Build debug APK
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
