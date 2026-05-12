@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Required so secrets stored under Environments → API_KEYS are visible to this job.
+    # Repository secrets work without this; environment-only secrets do not.
+    environment: API_KEYS
 
     steps:
       - name: Checkout code
