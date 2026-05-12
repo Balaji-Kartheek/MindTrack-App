@@ -100,7 +100,7 @@ def test_huggingface_api(api_key):
             print("Falling back to direct API call...")
     
     # Method 2: Direct API call
-    url = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base"
+    url = "https://router.huggingface.co/hf-inference/models/j-hartmann/emotion-english-distilroberta-base"
     
     headers = {
         "Authorization": f"Bearer {api_key}"
@@ -115,9 +115,11 @@ def test_huggingface_api(api_key):
         
         if response.status_code == 200:
             data = response.json()
+            # API returns nested array [[{...}]], unwrap it
+            emotions = data[0] if isinstance(data[0], list) else data
             print(f"✅ Hugging Face API Working!")
             print("Detected emotions:")
-            for emotion in data[:3]:  # Show top 3 emotions
+            for emotion in emotions[:3]:  # Show top 3 emotions
                 print(f"  • {emotion['label']}: {emotion['score']*100:.1f}%")
             return True
         elif response.status_code == 503:
