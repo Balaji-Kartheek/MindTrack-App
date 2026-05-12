@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.mindapp.BuildConfig
 import com.mindapp.R
 import com.mindapp.databinding.FragmentWellnessBinding
 import com.mindapp.prefs.MindAppPrefs
@@ -31,6 +32,14 @@ class WellnessFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            binding.tvDebugThresholdNote.visibility = View.VISIBLE
+            binding.tvDebugThresholdNote.text =
+                "Debug build: balance notifications use a 3-minute threshold and can repeat every 5 minutes while you stay above it. " +
+                "Release builds use your chip choice and one reminder per day. Background checks run about every 15 minutes."
+        } else {
+            binding.tvDebugThresholdNote.visibility = View.GONE
+        }
         setupThresholdChips()
         binding.btnRefreshWellness.setOnClickListener { loadContent() }
         loadContent()
@@ -51,7 +60,7 @@ class WellnessFragment : Fragment() {
             val ms = when (checkedIds.first()) {
                 R.id.chip_2h -> 120L * 60L * 1000L
                 R.id.chip_90m -> 90L * 60L * 1000L
-                else -> MindAppPrefs.DEFAULT_THRESHOLD_MS
+                else -> 60L * 60L * 1000L
             }
             MindAppPrefs.setUsageThresholdMs(ctx, ms)
             Toast.makeText(ctx, "Reminder threshold updated", Toast.LENGTH_SHORT).show()

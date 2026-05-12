@@ -3,6 +3,7 @@ package com.mindapp.usage
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.mindapp.BuildConfig
 import com.mindapp.notification.NotificationHelper
 import com.mindapp.prefs.MindAppPrefs
 import com.mindapp.wellness.WellnessTips
@@ -21,7 +22,12 @@ class UsageThresholdWorker(
             return Result.success()
         }
 
-        val threshold = MindAppPrefs.getUsageThresholdMs(ctx)
+        // Debug APK (GitHub artifact): 3 min threshold + 5 min cooldown for easier notification testing.
+        val threshold = if (BuildConfig.DEBUG) {
+            3L * 60L * 1000L
+        } else {
+            MindAppPrefs.getUsageThresholdMs(ctx)
+        }
         val totalOtherApps = UsageStatsHelper.getTotalScreenTime(ctx)
         if (totalOtherApps < threshold) {
             return Result.success()
@@ -29,8 +35,16 @@ class UsageThresholdWorker(
 
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val prefs = MindAppPrefs.prefs(ctx)
-        if (prefs.getString(MindAppPrefs.KEY_HEAVY_USAGE_NOTIFIED_DATE, null) == today) {
-            return Result.success()
+        if (BuildConfig.DEBUG) {
+            val last = prefs.getLong(MindAppPrefs.KEY_LAST_HEAVY_USAGE_NOTIFY_WALL_MS, 0L)
+            val cooldownMs = 5L * 60L * 1000L
+            if (System.currentTimeMillis() - last < cooldownMs) {
+                return Result.success()
+            }
+        } else {
+            if (prefs.getString(MindAppPrefs.KEY_HEAVY_USAGE_NOTIFIED_DATE, null) == today) {
+                return Result.success()
+            }
         }
 
         val social = UsageStatsHelper.getSocialMediaUsage(ctx)
@@ -47,7 +61,13 @@ class UsageThresholdWorker(
             tip
         )
 
-        prefs.edit().putString(MindAppPrefs.KEY_HEAVY_USAGE_NOTIFIED_DATE, today).apply()
+        if (BuildConfig.DEBUG) {
+            prefs.edit()
+                .putLong(MindAppPrefs.KEY_LAST_HEAVY_USAGE_NOTIFY_WALL_MS, System.currentTimeMillis())
+                .apply()
+        } else {
+            prefs.edit().putString(MindAppPrefs.KEY_HEAVY_USAGE_NOTIFIED_DATE, today).apply()
+        }
         return Result.success()
     }
 }

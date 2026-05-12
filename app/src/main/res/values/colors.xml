@@ -3,9 +3,19 @@
     <color name="colorPrimary">#6200EE</color>
     <color name="colorPrimaryDark">#3700B3</color>
     <color name="colorAccent">#03DAC5</color>
+
+    <!-- Wellness / light UI (explicit contrast) -->
+    <color name="wellness_screen_background">#F2F4F8</color>
+    <color name="wellness_card_background">#FFFFFF</color>
+    <color name="wellness_text_primary">#1A1C1E</color>
+    <color name="wellness_text_secondary">#5C5F62</color>
+    <color name="wellness_text_muted">#75777A</color>
+    <color name="wellness_suggestion_background">#E3F2FD</color>
+    <color name="wellness_debug_banner_background">#FFF8E1</color>
+    <color name="wellness_debug_banner_text">#5D4037</color>
     
     <!-- Navigation -->
-    <color name="nav_item_color">@android:color/black</color>
+    <color name="nav_item_color">@color/wellness_text_primary</color>
     
     <!-- Messages -->
     <color name="message_user_background">#6200EE</color>
@@ -14,6 +24,6 @@
     <!-- Alerts -->
     <color name="alert_background">#F44336</color>
     
-    <!-- Correlation -->
+    <!-- Correlation (shared with wellness suggestion) -->
     <color name="correlation_background">#E3F2FD</color>
 </resources>
