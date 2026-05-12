@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.mindapp.R
 import com.mindapp.databinding.FragmentWellnessBinding
 import com.mindapp.prefs.MindAppPrefs
 import com.mindapp.usage.UsageStatsHelper
