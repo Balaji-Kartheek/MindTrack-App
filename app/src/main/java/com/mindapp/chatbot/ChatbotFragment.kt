@@ -9,15 +9,18 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.mindapp.ApiConfig
+import com.mindapp.BuildConfig
 import com.mindapp.R
 import com.mindapp.databinding.FragmentChatbotBinding
 import com.mindapp.usage.UsageStatsHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
@@ -78,7 +81,11 @@ class ChatbotFragment : Fragment() {
     private fun setupRetrofit() {
         try {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
             }
             val client = OkHttpClient.Builder()
                 .addInterceptor(loggingInterceptor)
@@ -183,7 +190,22 @@ class ChatbotFragment : Fragment() {
                         Content(parts = listOf(Part(text = enhancedPrompt)))
                     )
                 )
-                val response = service.generateContent(request = request)
+                val apiKey = ApiConfig.GEMINI_API_KEY
+                val models = GeminiModelFallback.modelIdsOrdered()
+                lateinit var response: Response<GeminiResponse>
+                for (i in models.indices) {
+                    val url = GeminiModelFallback.endpointForModel(models[i])
+                    response = service.generateContent(url = url, apiKey = apiKey, request = request)
+                    val body = response.body()
+                    val text = body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    val ok = response.isSuccessful && !text.isNullOrBlank()
+                    if (ok) break
+                    val code = response.code()
+                    if (code == 401 || code == 400) break
+                    val retryable = code == 503 || code == 429 || code == 500
+                    if (!retryable || i == models.lastIndex) break
+                    delay(400)
+                }
 
                 withContext(Dispatchers.Main) {
                     if (chatMessages.isNotEmpty() && chatMessages.last().isLoading) {
@@ -201,8 +223,11 @@ class ChatbotFragment : Fragment() {
                         }
                     } else {
                         val errorMsg = response.errorBody()?.string() ?: "Unknown error"
+                        val hint503 = if (response.code() == 503 || response.code() == 429) {
+                            "\n\nThe service may be busy; try again in a moment."
+                        } else ""
                         chatMessages.add(ChatMessage(
-                            text = "❌ API Error\n\nCouldn't process your request.\n\nDetails: ${response.code()} - $errorMsg\n\nPlease check your API key in local.properties and rebuild the app.",
+                            text = "❌ API Error\n\nCouldn't process your request.\n\nDetails: ${response.code()} - $errorMsg$hint503\n\nCheck your API key and quota if this persists.",
                             isUser = false
                         ))
                     }

@@ -1,30 +1,39 @@
 package com.mindapp
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.mindapp.chatbot.ChatbotFragment
 import com.mindapp.mood.MoodCheckFragment
 import com.mindapp.usage.UsageStatsFragment
 import com.mindapp.usage.UsageStatsHelper
+import com.mindapp.usage.UsageWorkScheduler
+import com.mindapp.wellness.WellnessFragment
 
 /**
  * Main Activity with Bottom Navigation
  * 
- * This activity hosts three main fragments:
- * 1. UsageStatsFragment - Shows app usage statistics
- * 2. ChatbotFragment - AI chatbot powered by Gemini
- * 3. MoodCheckFragment - Emotion detection and mood tracking
+ * This activity hosts four main fragments:
+ * Usage, Chat, Mood, and Wellness (balance tips + threshold).
  */
 class MainActivity : AppCompatActivity() {
 
     private var bottomNavigation: BottomNavigationView? = null
+
+    companion object {
+        private const val RC_POST_NOTIFICATIONS = 2001
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install crash handler to show message instead of silent crash
@@ -48,6 +57,9 @@ class MainActivity : AppCompatActivity() {
             bottomNavigation = findViewById(R.id.bottom_navigation)
             val nav = bottomNavigation ?: return
 
+            UsageWorkScheduler.schedule(this)
+            requestPostNotificationsIfNeeded()
+
             // Set up bottom navigation listener
             nav.setOnItemSelectedListener { item ->
                 try {
@@ -62,6 +74,10 @@ class MainActivity : AppCompatActivity() {
                         }
                         R.id.nav_mood -> {
                             loadFragment(MoodCheckFragment())
+                            true
+                        }
+                        R.id.nav_wellness -> {
+                            loadFragment(WellnessFragment())
                             true
                         }
                         else -> false
@@ -142,5 +158,19 @@ class MainActivity : AppCompatActivity() {
             Log.e("MindApp", "openUsageStatsSettings", e)
             Toast.makeText(this, "Could not open Settings.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun requestPostNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            RC_POST_NOTIFICATIONS
+        )
     }
 }

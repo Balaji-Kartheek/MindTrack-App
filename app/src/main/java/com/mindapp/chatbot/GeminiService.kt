@@ -1,29 +1,20 @@
 package com.mindapp.chatbot
 
-import com.mindapp.ApiConfig
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 /**
- * Retrofit interface for Gemini API
- * 
- * Uses Google's Generative Language API (Gemini) to provide
- * AI-powered chatbot responses about digital wellbeing
+ * Retrofit interface for Gemini API (full URL per call for model fallback).
  */
 interface GeminiService {
-    
-    /**
-     * Sends a chat message to Gemini API
-     * 
-     * @param apiKey The Gemini API key (passed as query parameter)
-     * @param request The chat request body
-     * @return Response containing the AI-generated message
-     */
-    @POST("models/gemini-2.5-flash:generateContent")
+
+    @POST
     suspend fun generateContent(
-        @Query("key") apiKey: String = ApiConfig.GEMINI_API_KEY,
+        @Url url: String,
+        @Query("key") apiKey: String,
         @Body request: GeminiRequest
     ): Response<GeminiResponse>
 }

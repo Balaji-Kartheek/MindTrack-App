@@ -14,4 +14,9 @@
         android:id="@+id/nav_mood"
         android:icon="@android:drawable/ic_menu_compass"
         android:title="Mood" />
+
+    <item
+        android:id="@+id/nav_wellness"
+        android:icon="@android:drawable/ic_menu_day"
+        android:title="Wellness" />
 </menu>
